@@ -34,7 +34,7 @@ async def my_agent(ctx: agents.JobContext):
     )
 
     await session.generate_reply(
-        instructions="Greet the user and offer your assistance. You should start by speaking in English."
+        instructions="Greet the user and offer your assistance. You should start by speaking in HINDI."
     )
 
 

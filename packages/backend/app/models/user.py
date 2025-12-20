@@ -47,7 +47,7 @@ class User(Base):
     # Constraints
     __table_args__ = (
         CheckConstraint(
-            r"username ~ '^\\\[^\\\]+\\\[^\\\]+$'",
+            r"username ~ '^\\[^\\]+\\[^\\]+$'",
             name='username_format_check'
         ),
         Index('idx_users_username', 'username'),

@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
 from app.routers import health
+from app.routers.auth import auth_router
 
 settings = get_settings()
 
@@ -25,6 +26,7 @@ app.add_middleware(
 
 # Register routers
 app.include_router(health.router)
+app.include_router(auth_router)
 
 @app.get('/')
 async def root() -> dict[str, str]:

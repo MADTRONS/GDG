@@ -8,7 +8,7 @@ from app.config import get_settings
 
 
 def create_access_token(user_id: uuid.UUID, username: str) -> str:
-    \"\"\"
+    """
     Create JWT access token with user claims.
 
     Args:
@@ -19,9 +19,9 @@ def create_access_token(user_id: uuid.UUID, username: str) -> str:
         Encoded JWT token as string
 
     Example:
-        >>> token = create_access_token(user_id=uuid4(), username='\\\\COLLEGE\\\\jdoe')
+        >>> token = create_access_token(user_id=uuid4(), username=r'\\COLLEGE\\jdoe')
         >>> # Token can be decoded to verify claims
-    \"\"\"
+    """
     settings = get_settings()
 
     # Calculate expiration time

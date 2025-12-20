@@ -2,6 +2,18 @@
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1';
 
+export interface CounselorCategory {
+  id: string;
+  name: string;
+  description: string;
+  icon_name: string;
+}
+
+export interface CounselorCategoriesResponse {
+  categories: CounselorCategory[];
+  total: number;
+}
+
 export async function apiRequest<T>(
   endpoint: string,
   options?: RequestInit
@@ -44,3 +56,10 @@ export const loginUser = async (credentials: LoginFormData) => {
 
   return response.json();
 };
+
+export async function getCategories(): Promise<CounselorCategory[]> {
+  const response = await apiRequest<CounselorCategoriesResponse>(
+    '/counselors/categories'
+  );
+  return response.categories;
+}

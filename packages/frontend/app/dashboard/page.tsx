@@ -3,6 +3,7 @@
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
 import { DashboardFooter } from '@/components/dashboard/DashboardFooter';
+import { CounselorCardGrid } from '@/components/dashboard/CounselorCardGrid';
 
 export default function DashboardPage() {
   return (
@@ -23,9 +24,7 @@ export default function DashboardPage() {
           role="main"
           aria-label="Counselor categories"
         >
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {/* Counselor cards will be added in Story 2.3 */}
-          </div>
+          <CounselorCardGrid />
         </main>
         
         <DashboardFooter />

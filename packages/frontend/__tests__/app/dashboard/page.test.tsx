@@ -63,7 +63,9 @@ describe('DashboardPage', () => {
     render(<DashboardPage />);
 
     const main = screen.getByRole('main');
-    const grid = within(main).getByRole('generic', { hidden: true });
+    const grid = within(main).getAllByRole('generic', { hidden: true }).find(el => 
+      el.className.includes('grid')
+    );
     
     expect(grid).toHaveClass('grid');
     expect(grid).toHaveClass('grid-cols-1');

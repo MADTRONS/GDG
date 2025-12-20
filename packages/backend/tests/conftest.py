@@ -68,3 +68,42 @@ async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
         yield ac
     
     app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def auth_headers() -> dict:
+    """Create authentication headers with a valid JWT token."""
+    from app.utils.jwt import create_access_token
+    from uuid import uuid4
+    
+    token = create_access_token(user_id=uuid4(), username="testdomain\\testuser")
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest_asyncio.fixture
+async def test_user(db_session: AsyncSession):
+    """Create a test user."""
+    from app.models.user import User
+    from app.utils.security import hash_password
+    
+    user = User(
+        username=r'\testdomain\testuser',
+        password_hash=hash_password('testpassword'),
+        is_blocked=False
+    )
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+    return user
+
+
+@pytest_asyncio.fixture
+async def authenticated_client(client: AsyncClient, test_user) -> AsyncClient:
+    """Create an authenticated test client by logging in."""
+    # Login to get cookie
+    response = await client.post('/api/auth/login', json={
+        'username': test_user.username,
+        'password': 'testpassword'
+    })
+    assert response.status_code == 200
+    return client

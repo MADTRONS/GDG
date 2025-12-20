@@ -2,10 +2,12 @@
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_settings
 from app.database import get_db
 from app.repositories.user_repository import UserRepository
 from app.schemas.auth import LoginRequest, LoginResponse
 from app.schemas.user import UserResponse
+from app.utils.dependencies import get_current_user
 from app.utils.jwt import create_access_token
 from app.utils.security import verify_password
 
@@ -66,11 +68,12 @@ async def login(
     access_token = create_access_token(user_id=user.id, username=user.username)
 
     # Set httpOnly cookie
+    settings = get_settings()
     response.set_cookie(
         key='access_token',
         value=access_token,
         httponly=True,
-        secure=True,
+        secure=settings.environment == 'production',
         samesite='lax',
         max_age=86400
     )
@@ -81,3 +84,51 @@ async def login(
         token_type='bearer',
         user=UserResponse.model_validate(user)
     )
+
+
+@auth_router.post('/logout')
+async def logout(
+    response: Response, current_user: dict = Depends(get_current_user)
+) -> dict:
+    """
+    Log out user by clearing authentication cookie.
+
+    Args:
+        response: FastAPI response object for clearing cookies
+        current_user: Current authenticated user from JWT token
+
+    Returns:
+        Success message
+
+    Raises:
+        HTTPException 401: Not authenticated
+    """
+    # Clear the authentication cookie
+    settings = get_settings()
+    response.set_cookie(
+        key='access_token',
+        value='',
+        httponly=True,
+        secure=settings.environment == 'production',
+        samesite='lax',
+        max_age=0,  # Expire immediately
+    )
+
+    return {'message': 'Successfully logged out'}
+
+
+@auth_router.get('/me')
+async def get_current_user_info(current_user: dict = Depends(get_current_user)) -> dict:
+    """
+    Get current authenticated user information.
+
+    Args:
+        current_user: Current authenticated user from JWT token
+
+    Returns:
+        User ID and username
+
+    Raises:
+        HTTPException 401: Not authenticated
+    """
+    return {'user_id': current_user['user_id'], 'username': current_user['username']}

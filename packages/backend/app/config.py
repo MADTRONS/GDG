@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     jwt_algorithm: str = 'HS256'
     jwt_expiration_minutes: int = 60 * 24  # 24 hours
 
+    # Environment
+    environment: str = 'development'  # 'development', 'test', 'production'
+
     # CORS
     cors_origins: str = 'http://localhost:3000,http://localhost:3001'  # Comma-separated
 

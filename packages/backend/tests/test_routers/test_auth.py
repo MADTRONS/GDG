@@ -207,3 +207,166 @@ async def test_login_case_sensitive_password(client: AsyncClient, test_user: Use
     })
     
     assert response.status_code == 401
+
+# Logout endpoint tests
+
+
+@pytest.mark.asyncio
+async def test_logout_success(client: AsyncClient, test_user: User):
+    """Test successful logout with valid authentication."""
+    # Login first
+    login_response = await client.post('/api/auth/login', json={
+        'username': test_user.username,
+        'password': 'correctpassword'
+    })
+    assert login_response.status_code == 200
+    
+    # Logout
+    logout_response = await client.post('/api/auth/logout')
+    assert logout_response.status_code == 200
+    
+    # Check response
+    data = logout_response.json()
+    assert 'message' in data
+    assert data['message'] == 'Successfully logged out'
+
+
+@pytest.mark.asyncio
+async def test_logout_clears_cookie(client: AsyncClient, test_user: User):
+    """Test logout clears the authentication cookie."""
+    # Login first
+    login_response = await client.post('/api/auth/login', json={
+        'username': test_user.username,
+        'password': 'correctpassword'
+    })
+    assert login_response.status_code == 200
+    
+    # Logout
+    logout_response = await client.post('/api/auth/logout')
+    assert logout_response.status_code == 200
+    
+    # Check cookie is cleared (set-cookie header present with max_age=0)
+    assert 'set-cookie' in logout_response.headers
+    cookie_header = logout_response.headers['set-cookie']
+    assert 'access_token=' in cookie_header
+    assert 'Max-Age=0' in cookie_header or 'max-age=0' in cookie_header.lower()
+
+
+@pytest.mark.asyncio
+async def test_logout_without_authentication(client: AsyncClient):
+    """Test logout fails without authentication."""
+    # Attempt logout without being logged in
+    response = await client.post('/api/auth/logout')
+    
+    # Should return 401
+    assert response.status_code == 401
+    assert response.json()['detail'] == 'Not authenticated'
+
+
+@pytest.mark.asyncio
+async def test_logout_prevents_further_access(client: AsyncClient, test_user: User):
+    """Test subsequent requests fail after logout."""
+    # Login
+    login_response = await client.post('/api/auth/login', json={
+        'username': test_user.username,
+        'password': 'correctpassword'
+    })
+    assert login_response.status_code == 200
+    
+    # Access protected endpoint - should work
+    me_response = await client.get('/api/auth/me')
+    assert me_response.status_code == 200
+    
+    # Logout
+    logout_response = await client.post('/api/auth/logout')
+    assert logout_response.status_code == 200
+    
+    # Try to access protected endpoint after logout - should fail
+    me_response_after = await client.get('/api/auth/me')
+    assert me_response_after.status_code == 401
+
+
+# /me endpoint tests
+
+
+@pytest.mark.asyncio
+async def test_me_endpoint_authenticated(client: AsyncClient, test_user: User):
+    """Test /me endpoint returns user info when authenticated."""
+    # Login first
+    login_response = await client.post('/api/auth/login', json={
+        'username': test_user.username,
+        'password': 'correctpassword'
+    })
+    assert login_response.status_code == 200
+    
+    # Call /me endpoint
+    response = await client.get('/api/auth/me')
+    assert response.status_code == 200
+    
+    # Check response
+    data = response.json()
+    assert 'user_id' in data
+    assert 'username' in data
+    assert data['username'] == test_user.username
+    assert data['user_id'] == str(test_user.id)
+
+
+@pytest.mark.asyncio
+async def test_me_endpoint_unauthenticated(client: AsyncClient):
+    """Test /me endpoint fails without authentication."""
+    response = await client.get('/api/auth/me')
+    
+    # Should return 401
+    assert response.status_code == 401
+    assert response.json()['detail'] == 'Not authenticated'
+
+
+# Integration tests
+
+
+@pytest.mark.asyncio
+async def test_full_authentication_flow(client: AsyncClient, test_user: User):
+    """Test full flow: login -> access protected -> logout -> fail to access."""
+    # Step 1: Login
+    login_response = await client.post('/api/auth/login', json={
+        'username': test_user.username,
+        'password': 'correctpassword'
+    })
+    assert login_response.status_code == 200
+    
+    # Step 2: Access protected resource
+    me_response = await client.get('/api/auth/me')
+    assert me_response.status_code == 200
+    assert me_response.json()['username'] == test_user.username
+    
+    # Step 3: Logout
+    logout_response = await client.post('/api/auth/logout')
+    assert logout_response.status_code == 200
+    
+    # Step 4: Fail to access protected resource
+    me_response_after = await client.get('/api/auth/me')
+    assert me_response_after.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_multiple_login_logout_cycles(client: AsyncClient, test_user: User):
+    """Test multiple login/logout cycles work correctly."""
+    for _ in range(3):
+        # Login
+        login_response = await client.post('/api/auth/login', json={
+            'username': test_user.username,
+            'password': 'correctpassword'
+        })
+        assert login_response.status_code == 200
+        
+        # Access protected endpoint
+        me_response = await client.get('/api/auth/me')
+        assert me_response.status_code == 200
+        
+        # Logout
+        logout_response = await client.post('/api/auth/logout')
+        assert logout_response.status_code == 200
+        
+        # Verify logout worked
+        me_response_after = await client.get('/api/auth/me')
+        assert me_response_after.status_code == 401

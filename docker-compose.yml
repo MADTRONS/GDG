@@ -24,7 +24,7 @@
       dockerfile: Dockerfile
     container_name: counseling-backend
     environment:
-      DATABASE_URL: postgresql+asyncpg://counseling:devpassword@postgres:5432/counseling_platform
+      DATABASE_URL: postgresql+psycopg://counseling:devpassword@postgres:5432/counseling_platform
       JWT_SECRET_KEY: dev-secret-key-change-in-production
       JWT_ALGORITHM: HS256
     ports:

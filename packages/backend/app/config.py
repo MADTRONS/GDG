@@ -9,7 +9,7 @@ class Settings(BaseSettings):
         case_sensitive = False
 
     # Database
-    database_url: str = 'postgresql+asyncpg://counseling:devpassword@localhost:5432/counseling_platform'
+    database_url: str = 'postgresql+psycopg://counseling:devpassword@localhost:5432/counseling_platform'
 
     # JWT
     jwt_secret_key: str = 'your-secret-key-here-change-in-production'

@@ -2,6 +2,7 @@
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
+from app.routers import health
 
 settings = get_settings()
 
@@ -22,10 +23,9 @@ app.add_middleware(
     allow_headers=['*'],
 )
 
+# Register routers
+app.include_router(health.router)
+
 @app.get('/')
 async def root() -> dict[str, str]:
     return {'message': 'College Counseling Platform API', 'version': '1.0.0'}
-
-@app.get('/health')
-async def health() -> dict[str, str]:
-    return {'status': 'healthy'}

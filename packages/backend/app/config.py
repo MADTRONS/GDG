@@ -13,6 +13,9 @@ class Settings(BaseSettings):
     jwt_algorithm: str = 'HS256'
     jwt_expiration_minutes: int = 60 * 24  # 24 hours
     
+    # CORS
+    cors_origins: str = 'http://localhost:3000,http://localhost:3001'  # Comma-separated
+    
     # External Services (placeholders)
     daily_api_key: str = ''
     livekit_api_key: str = ''

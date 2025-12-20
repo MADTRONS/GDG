@@ -1,5 +1,8 @@
 ﻿from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from app.config import get_settings
+
+settings = get_settings()
 
 app = FastAPI(
     title='College Counseling Platform API',
@@ -9,10 +12,10 @@ app = FastAPI(
     redoc_url='/redoc'
 )
 
-# CORS Configuration
+# CORS Configuration - origins from settings
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=['http://localhost:3000'],  # Frontend dev server
+    allow_origins=settings.cors_origins.split(','),
     allow_credentials=True,
     allow_methods=['*'],
     allow_headers=['*'],

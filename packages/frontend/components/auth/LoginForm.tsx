@@ -10,11 +10,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { loginSchema, type LoginFormData } from '@/lib/schemas';
 import { loginUser } from '@/lib/api';
+import { useAuth } from './AuthProvider';
 
 export function LoginForm() {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
+  const { login } = useAuth();
 
   const {
     register,
@@ -30,7 +32,8 @@ export function LoginForm() {
     setError(null);
 
     try {
-      await loginUser(data);
+      const userData = await loginUser(data);
+      login(userData);
       router.push('/dashboard');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Login failed';

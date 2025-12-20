@@ -67,7 +67,7 @@ jobs:
           labels: ${{ steps.meta-backend.outputs.labels }}
       
       - name: Trigger Railway deployment
-        if: secrets.RAILWAY_TOKEN != ''
+        if: secrets.RAILWAY_TOKEN
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: |

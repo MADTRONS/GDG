@@ -1,0 +1,58 @@
+﻿services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16.1-alpine
+    container_name: counseling-db
+    environment:
+      POSTGRES_USER: counseling
+      POSTGRES_PASSWORD: devpassword
+      POSTGRES_DB: counseling_platform
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U counseling']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend API
+  backend:
+    build:
+      context: ./packages/backend
+      dockerfile: Dockerfile
+    container_name: counseling-backend
+    environment:
+      DATABASE_URL: postgresql+asyncpg://counseling:devpassword@postgres:5432/counseling_platform
+      JWT_SECRET_KEY: dev-secret-key-change-in-production
+      JWT_ALGORITHM: HS256
+    ports:
+      - '8000:8000'
+    volumes:
+      - ./packages/backend:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # Frontend
+  frontend:
+    build:
+      context: ./packages/frontend
+      dockerfile: Dockerfile
+    container_name: counseling-frontend
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:8000/api/v1
+    ports:
+      - '3000:3000'
+    volumes:
+      - ./packages/frontend:/app
+      - /app/node_modules
+      - /app/.next
+    depends_on:
+      - backend
+    command: pnpm dev
+
+volumes:
+  postgres_data:

@@ -1,5 +1,6 @@
 ﻿from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
 from app.config import get_settings
 
 settings = get_settings()
@@ -22,9 +23,9 @@ app.add_middleware(
 )
 
 @app.get('/')
-async def root():
+async def root() -> dict[str, str]:
     return {'message': 'College Counseling Platform API', 'version': '1.0.0'}
 
 @app.get('/health')
-async def health():
+async def health() -> dict[str, str]:
     return {'status': 'healthy'}

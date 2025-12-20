@@ -207,7 +207,50 @@ See .env.example for all required environment variables. Key variables:
 - CARTESIA_API_KEY: Text-to-speech API key
 - GOOGLE_API_KEY: Google Gemini API key
 - OPENAI_API_KEY: OpenAI API key (fallback)
+## CI/CD
 
+This project uses GitHub Actions for continuous integration and deployment.
+
+### GitHub Secrets Configuration
+
+Configure the following secrets in your GitHub repository (Settings → Secrets and variables → Actions):
+
+**Required for CI:**
+- `DATABASE_URL_TEST`: PostgreSQL connection string for CI tests
+  - Example: `postgresql://postgres:testpassword@localhost:5432/counseling_test`
+
+**Required for Deployment:**
+- `RAILWAY_TOKEN`: Railway deployment token (if using Railway)
+- `JWT_SECRET_KEY`: Secret key for JWT signing in production
+
+**Optional:**
+- `DOCKER_USERNAME`: Docker registry username (if using Docker Hub)
+- `DOCKER_PASSWORD`: Docker registry password
+
+### CI Workflows
+
+**Frontend CI** (`.github/workflows/ci-frontend.yml`):
+- Runs on PRs affecting frontend code
+- ESLint, TypeScript checking, tests
+- Docker image build validation
+
+**Backend CI** (`.github/workflows/ci-backend.yml`):
+- Runs on PRs affecting backend code
+- Ruff linting, mypy type checking, pytest with coverage
+- PostgreSQL service container for integration tests
+- Docker image build validation
+
+**Deployment** (`.github/workflows/deploy.yml`):
+- Runs on push to main branch
+- Builds and pushes Docker images to GitHub Container Registry
+- Triggers Railway deployment (if configured)
+
+### Branch Protection
+
+Recommended branch protection rules for `main`:
+- ✅ Require pull request reviews before merging
+- ✅ Require status checks to pass (Frontend CI, Backend CI)
+- ✅ Require branches to be up to date before merging
 ## Testing
 
 \\\ash

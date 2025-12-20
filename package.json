@@ -8,7 +8,7 @@
     "build": "turbo run build",
     "test": "turbo run test",
     "lint": "turbo run lint",
-    "format": "prettier --write "**/*.{ts,tsx,js,jsx,json,md}""
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\""
   },
   "devDependencies": {
     "turbo": "^1.12.0",

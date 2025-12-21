@@ -7,6 +7,13 @@ afterEach(() => {
   cleanup();
 });
 
+// Mock ResizeObserver for Radix UI components
+global.ResizeObserver = class ResizeObserver {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+};
+
 // Mock Next.js router
 vi.mock('next/navigation', () => ({
   useRouter: vi.fn(() => ({

@@ -178,7 +178,8 @@ describe('VoiceSessionPage - Daily.co Connection', () => {
         }),
         leave: vi.fn(),
         destroy: vi.fn(),
-        setLocalAudio: vi.fn()
+        setLocalAudio: vi.fn(),
+        setOutputVolume: vi.fn()
       };
 
       vi.mocked(DailyIframe.createCallObject).mockReturnValue(mockCallObject as any);
@@ -270,7 +271,8 @@ describe('VoiceSessionPage - Daily.co Connection', () => {
         }),
         leave: vi.fn(),
         destroy: vi.fn(),
-        setLocalAudio: vi.fn()
+        setLocalAudio: vi.fn(),
+        setOutputVolume: vi.fn()
       };
 
       vi.mocked(DailyIframe.createCallObject).mockReturnValue(mockCallObject as any);
@@ -281,7 +283,7 @@ describe('VoiceSessionPage - Daily.co Connection', () => {
         expect(screen.getAllByText(/^connected$/i)[0]).toBeInTheDocument();
       });
 
-      const muteButton = screen.getAllByRole('button', { name: /^mute$/i })[0];
+      const muteButton = screen.getAllByRole('button', { name: /mute microphone/i })[0];
       fireEvent.click(muteButton);
 
       await waitFor(() => {
@@ -299,7 +301,8 @@ describe('VoiceSessionPage - Daily.co Connection', () => {
         }),
         leave: vi.fn(),
         destroy: vi.fn(),
-        setLocalAudio: vi.fn()
+        setLocalAudio: vi.fn(),
+        setOutputVolume: vi.fn()
       };
 
       vi.mocked(DailyIframe.createCallObject).mockReturnValue(mockCallObject as any);
@@ -311,15 +314,15 @@ describe('VoiceSessionPage - Daily.co Connection', () => {
       });
 
       // Mute first
-      const muteButton = screen.getAllByRole('button', { name: /^mute$/i })[0];
+      const muteButton = screen.getAllByRole('button', { name: /mute microphone/i })[0];
       fireEvent.click(muteButton);
 
       await waitFor(() => {
-        expect(screen.getAllByRole('button', { name: /unmute/i })[0]).toBeInTheDocument();
+        expect(screen.getAllByRole('button', { name: /mute microphone/i })[0]).toHaveAttribute('aria-pressed', 'true');
       });
 
       // Then unmute
-      const unmuteButton = screen.getAllByRole('button', { name: /unmute/i })[0];
+      const unmuteButton = screen.getAllByRole('button', { name: /mute microphone/i })[0];
       fireEvent.click(unmuteButton);
 
       await waitFor(() => {
@@ -680,7 +683,8 @@ describe('VoiceSessionPage - Daily.co Connection', () => {
           }
         }),
         leave: vi.fn(),
-        destroy: vi.fn()
+        destroy: vi.fn(),
+        setOutputVolume: vi.fn()
       };
 
       vi.mocked(DailyIframe.createCallObject).mockReturnValue(mockCallObject as any);
@@ -779,7 +783,8 @@ describe('VoiceSessionPage - Daily.co Connection', () => {
           }
         }),
         leave: vi.fn(),
-        destroy: vi.fn()
+        destroy: vi.fn(),
+        setOutputVolume: vi.fn()
       };
 
       vi.mocked(DailyIframe.createCallObject).mockReturnValue(mockCallObject as any);

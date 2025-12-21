@@ -2,15 +2,15 @@
 
 import { useEffect, useState, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { RTVIClient } from '@pipecat-ai/client-js';
 import DailyIframe from '@daily-co/daily-js';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { PhoneOff, Loader2, Mic, MicOff } from 'lucide-react';
+import { Loader2, Mic, MicOff } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import type { ConnectionState } from '@/types/voice';
 import { TranscriptPanel } from '@/components/voice/TranscriptPanel';
+import { SessionControls } from '@/components/voice/SessionControls';
 import { TranscriptEntry } from '@/types/transcript';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -31,10 +31,13 @@ function VoiceSessionContent() {
   const [showEndDialog, setShowEndDialog] = useState(false);
   const [permissionDenied, setPermissionDenied] = useState(false);
   const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
+  const [volume, setVolume] = useState(80); // Default 80%
+  const [connectionQuality, setConnectionQuality] = useState<'excellent' | 'fair' | 'poor' | null>(null);
 
   // Refs
   const dailyCallRef = useRef<any>(null);
   const hasConnected = useRef(false);
+  const sessionStartTime = useRef<number>(Date.now());
 
   // Add transcript entry helper
   const addTranscriptEntry = (speaker: 'user' | 'bot', text: string) => {
@@ -46,6 +49,14 @@ function VoiceSessionContent() {
     };
     setTranscript(prev => [...prev, entry]);
   };
+
+  // Load saved volume preference
+  useEffect(() => {
+    const savedVolume = localStorage.getItem('voice-session-volume');
+    if (savedVolume) {
+      setVolume(parseInt(savedVolume, 10));
+    }
+  }, []);
 
   // Validate params
   useEffect(() => {
@@ -92,6 +103,10 @@ function VoiceSessionContent() {
         dailyCall.on('joined-meeting', () => {
           console.log('Joined Daily meeting');
           setConnectionState('connected');
+          
+          // Apply saved volume
+          (dailyCall as any).setOutputVolume(volume / 100);
+          
           toast({
             title: "Connected",
             description: `You're now connected to ${category}. Start speaking!`
@@ -134,6 +149,20 @@ function VoiceSessionContent() {
             }
           } catch (error) {
             console.error('Error processing app message:', error);
+          }
+        });
+
+        // Network quality monitoring
+        dailyCall.on('network-quality-change', (event: any) => {
+          const quality = event.quality;
+          
+          // Map Daily.co quality threshold to our categories
+          if (quality > 0.7) {
+            setConnectionQuality('excellent');
+          } else if (quality > 0.4) {
+            setConnectionQuality('fair');
+          } else {
+            setConnectionQuality('poor');
           }
         });
 
@@ -182,8 +211,32 @@ function VoiceSessionContent() {
     }
   };
 
+  // Volume change handler
+  const handleVolumeChange = async (newVolume: number) => {
+    setVolume(newVolume);
+    localStorage.setItem('voice-session-volume', newVolume.toString());
+
+    // Apply volume to Daily.co output
+    if (dailyCallRef.current) {
+      try {
+        await (dailyCallRef.current as any).setOutputVolume(newVolume / 100); // Daily expects 0.0-1.0
+      } catch (error) {
+        console.error('Failed to set volume:', error);
+      }
+    }
+  };
+
   // End session handler
   const handleEndSession = async () => {
+    // Prepare session data for saving (Story 3.7 will implement full API call)
+    const sessionData = {
+      session_id: sessionId,
+      transcript,
+      duration: Math.floor((Date.now() - sessionStartTime.current) / 1000), // seconds
+      ended_at: new Date().toISOString()
+    };
+    console.log('Session data to save:', sessionData);
+
     if (dailyCallRef.current) {
       await dailyCallRef.current.leave();
       dailyCallRef.current.destroy();
@@ -275,60 +328,52 @@ function VoiceSessionContent() {
     <div className="container mx-auto min-h-screen p-4">
       {/* Desktop layout: Side-by-side */}
       <div className="hidden md:grid md:grid-cols-[1fr,400px] gap-4 h-[calc(100vh-2rem)]">
-        {/* Main session card */}
-        <Card className="flex flex-col">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle>Voice Session: {category}</CardTitle>
-              {renderConnectionStatus()}
-            </div>
-          </CardHeader>
-          <CardContent className="flex-1 flex flex-col justify-between space-y-6">
-            {/* Audio visualization */}
-            <div className="flex items-center justify-center flex-1 bg-muted rounded-lg">
-              <div className="text-center space-y-4">
-                <div className="text-6xl">
-                  {isMuted ? <MicOff className="mx-auto" /> : <Mic className="mx-auto animate-pulse" />}
-                </div>
-                <p className="text-muted-foreground">
-                  {connectionState === 'connected' 
-                    ? isMuted 
-                      ? 'Microphone muted. Click to unmute.'
-                      : 'Listening... Speak freely.'
-                    : 'Connecting...'}
-                </p>
+        {/* Main session area */}
+        <div className="flex flex-col gap-4">
+          {/* Main session card */}
+          <Card className="flex-1 flex flex-col">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle>Voice Session: {category}</CardTitle>
+                {renderConnectionStatus()}
               </div>
-            </div>
+            </CardHeader>
+            <CardContent className="flex-1 flex flex-col justify-center space-y-6">
+              {/* Audio visualization */}
+              <div className="flex items-center justify-center flex-1 bg-muted rounded-lg">
+                <div className="text-center space-y-4">
+                  <div className="text-6xl">
+                    {isMuted ? <MicOff className="mx-auto" /> : <Mic className="mx-auto animate-pulse" />}
+                  </div>
+                  <p className="text-muted-foreground">
+                    {connectionState === 'connected' 
+                      ? isMuted 
+                        ? 'Microphone muted. Click to unmute.'
+                        : 'Listening... Speak freely.'
+                      : 'Connecting...'}
+                  </p>
+                </div>
+              </div>
 
-            {/* Session controls */}
-            <div className="flex gap-3 justify-center">
-              <Button
-                onClick={toggleMute}
-                variant={isMuted ? 'destructive' : 'secondary'}
-                disabled={connectionState !== 'connected'}
-                className="flex-1 max-w-xs"
-              >
-                {isMuted ? <MicOff className="mr-2 h-4 w-4" /> : <Mic className="mr-2 h-4 w-4" />}
-                {isMuted ? 'Unmute' : 'Mute'}
-              </Button>
-              
-              <Button
-                onClick={() => setShowEndDialog(true)}
-                variant="destructive"
-                className="flex-1 max-w-xs"
-              >
-                <PhoneOff className="mr-2 h-4 w-4" />
-                End Session
-              </Button>
-            </div>
+              {/* Session info */}
+              <div className="text-xs text-muted-foreground text-center space-y-1">
+                <p>Session ID: {sessionId}</p>
+                <p>If you&apos;re in crisis, call 988 (Suicide & Crisis Lifeline) immediately.</p>
+              </div>
+            </CardContent>
+          </Card>
 
-            {/* Session info */}
-            <div className="text-xs text-muted-foreground text-center space-y-1">
-              <p>Session ID: {sessionId}</p>
-              <p>If you&apos;re in crisis, call 988 (Suicide & Crisis Lifeline) immediately.</p>
-            </div>
-          </CardContent>
-        </Card>
+          {/* Session Controls */}
+          <SessionControls
+            isMuted={isMuted}
+            onToggleMute={toggleMute}
+            volume={volume}
+            onVolumeChange={handleVolumeChange}
+            onEndSession={() => setShowEndDialog(true)}
+            connectionState={connectionState}
+            connectionQuality={connectionQuality}
+          />
+        </div>
 
         {/* Transcript panel */}
         <TranscriptPanel entries={transcript} />
@@ -361,28 +406,6 @@ function VoiceSessionContent() {
               </div>
             </div>
 
-            {/* Session controls */}
-            <div className="flex gap-2">
-              <Button
-                onClick={toggleMute}
-                variant={isMuted ? 'destructive' : 'secondary'}
-                disabled={connectionState !== 'connected'}
-                className="flex-1"
-              >
-                {isMuted ? <MicOff className="mr-2 h-4 w-4" /> : <Mic className="mr-2 h-4 w-4" />}
-                {isMuted ? 'Unmute' : 'Mute'}
-              </Button>
-              
-              <Button
-                onClick={() => setShowEndDialog(true)}
-                variant="destructive"
-                className="flex-1"
-              >
-                <PhoneOff className="mr-2 h-4 w-4" />
-                End
-              </Button>
-            </div>
-
             {/* Session info */}
             <div className="text-xs text-muted-foreground text-center space-y-1">
               <p>Session ID: {sessionId}</p>
@@ -390,6 +413,17 @@ function VoiceSessionContent() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Session Controls */}
+        <SessionControls
+          isMuted={isMuted}
+          onToggleMute={toggleMute}
+          volume={volume}
+          onVolumeChange={handleVolumeChange}
+          onEndSession={() => setShowEndDialog(true)}
+          connectionState={connectionState}
+          connectionQuality={connectionQuality}
+        />
 
         {/* Transcript panel (fixed height on mobile) */}
         <div className="h-96">

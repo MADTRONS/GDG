@@ -9,3 +9,7 @@ python-multipart==0.0.20
 loguru==0.7.3
 bcrypt==4.1.2
 python-jose[cryptography]==3.3.0
+requests==2.31.0
+daily-python==0.10.1
+deepgram-sdk==3.2.0
+google-generativeai==0.3.2

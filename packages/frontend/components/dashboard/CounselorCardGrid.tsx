@@ -1,12 +1,14 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { CounselorCard } from './CounselorCard';
 import { CounselorCardSkeleton } from './CounselorCardSkeleton';
 import { getCategories, type CounselorCategory } from '@/lib/api';
 import { useToast } from '@/components/ui/use-toast';
+import { useAuth } from '@/components/auth/AuthProvider';
 
 export function CounselorCardGrid() {
   const [categories, setCategories] = useState<CounselorCategory[]>([]);
@@ -15,6 +17,8 @@ export function CounselorCardGrid() {
   const [loadingVoice, setLoadingVoice] = useState<string | null>(null);
   const [loadingVideo, setLoadingVideo] = useState<string | null>(null);
   const { toast } = useToast();
+  const { user } = useAuth();
+  const router = useRouter();
 
   const fetchCategories = async () => {
     try {
@@ -34,23 +38,73 @@ export function CounselorCardGrid() {
   }, []);
 
   const handleVoiceCall = async (category: CounselorCategory) => {
-    console.log('Voice call requested for category:', category.name);
-    console.log('Category ID:', category.id);
-    
-    // Set loading state
+    // Guard: prevent duplicate requests
+    if (loadingVoice === category.id) return;
+
+    // Guard: check authentication
+    if (!user) {
+      toast({
+        title: "Authentication Required",
+        description: "Please log in to start a voice session.",
+        variant: "destructive"
+      });
+      router.push('/');
+      return;
+    }
+
     setLoadingVoice(category.id);
-    
-    // Show toast notification
-    toast({
-      title: "Coming Soon",
-      description: "Voice calling will be available in the next update. Stay tuned!",
-      duration: 4000,
-    });
-    
-    // Clear loading state after delay
-    setTimeout(() => {
+
+    try {
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1'}/voice/create-room`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include', // Include auth cookie
+          body: JSON.stringify({
+            counselor_category: category.id
+          })
+        }
+      );
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.detail || 'Failed to create voice session');
+      }
+
+      const data = await response.json();
+      
+      // Navigate to voice session page with room credentials
+      router.push(
+        `/voice-session?` +
+        `room_url=${encodeURIComponent(data.room_url)}&` +
+        `user_token=${encodeURIComponent(data.user_token)}&` +
+        `session_id=${encodeURIComponent(data.session_id)}&` +
+        `category=${encodeURIComponent(category.name)}`
+      );
+
+    } catch (error) {
+      console.error('Voice call initiation error:', error);
+      
+      toast({
+        title: "Connection Failed",
+        description: error instanceof Error ? error.message : "Unable to start voice session. Please try again.",
+        variant: "destructive",
+        action: (
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => handleVoiceCall(category)}
+          >
+            Retry
+          </Button>
+        )
+      });
+    } finally {
       setLoadingVoice(null);
-    }, 4000);
+    }
   };
 
   const handleVideoCall = async (category: CounselorCategory) => {

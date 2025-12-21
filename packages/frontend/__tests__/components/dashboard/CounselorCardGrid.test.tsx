@@ -5,6 +5,11 @@ import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import { CounselorCardGrid } from '@/components/dashboard/CounselorCardGrid';
 import { Toaster } from '@/components/ui/toaster';
+import { useAuth } from '@/components/auth/AuthProvider';
+import { useRouter } from 'next/navigation';
+
+vi.mock('@/components/auth/AuthProvider');
+vi.mock('next/navigation');
 
 const mockCategories = [
   {
@@ -36,8 +41,30 @@ const server = setupServer(
   })
 );
 
+const mockPush = vi.fn();
+const mockUser = { id: 'user-123', username: 'testuser', is_blocked: false };
+
 beforeEach(() => {
   server.listen({ onUnhandledRequest: 'error' });
+  
+  // Mock useAuth to return authenticated user
+  vi.mocked(useAuth).mockReturnValue({
+    user: mockUser,
+    isAuthenticated: true,
+    isLoading: false,
+    login: vi.fn(),
+    logout: vi.fn()
+  } as any);
+  
+  // Mock useRouter
+  vi.mocked(useRouter).mockReturnValue({
+    push: mockPush,
+    replace: vi.fn(),
+    back: vi.fn(),
+    forward: vi.fn(),
+    refresh: vi.fn(),
+    prefetch: vi.fn()
+  } as any);
 });
 afterEach(() => {
   server.resetHandlers();

@@ -63,3 +63,26 @@ export async function getCategories(): Promise<CounselorCategory[]> {
   );
   return response.categories;
 }
+
+// Voice Session API Types
+export interface CreateVoiceRoomRequest {
+  counselor_category: string; // UUID
+}
+
+export interface CreateVoiceRoomResponse {
+  room_url: string;
+  user_token: string;
+  room_name: string;
+  session_id: string;
+}
+
+export async function createVoiceRoom(
+  categoryId: string
+): Promise<CreateVoiceRoomResponse> {
+  return apiRequest<CreateVoiceRoomResponse>('/voice/create-room', {
+    method: 'POST',
+    body: JSON.stringify({
+      counselor_category: categoryId
+    })
+  });
+}

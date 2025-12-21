@@ -31,6 +31,9 @@ class CounselorCategory(Base):
     description: Mapped[str] = mapped_column(Text, nullable=False)
     icon_name: Mapped[str] = mapped_column(String(50), nullable=False)
     
+    # AI configuration
+    system_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
+    
     # Status
     enabled: Mapped[bool] = mapped_column(
         Boolean,

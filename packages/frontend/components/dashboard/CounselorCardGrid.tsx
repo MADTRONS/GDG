@@ -53,9 +53,24 @@ export function CounselorCardGrid() {
     }, 4000);
   };
 
-  const handleVideoCall = (category: CounselorCategory) => {
-    console.log('Video call initiated for:', category.name);
-    // TODO: Navigate to video call session (Story 4.3)
+  const handleVideoCall = async (category: CounselorCategory) => {
+    console.log('Video call requested for category:', category.name);
+    console.log('Category ID:', category.id);
+    
+    // Set loading state
+    setLoadingVideo(category.id);
+    
+    // Show toast notification
+    toast({
+      title: "Coming Soon",
+      description: "Video calling will be available in the next update. Stay tuned!",
+      duration: 4000,
+    });
+    
+    // Clear loading state after delay
+    setTimeout(() => {
+      setLoadingVideo(null);
+    }, 4000);
   };
 
   // Loading state

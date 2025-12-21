@@ -153,7 +153,8 @@ describe('CounselorCardGrid', () => {
     // Click video call button
     const videoButtons = screen.getAllByRole('button', { name: /video call/i });
     await user.click(videoButtons[0]);
-    expect(consoleSpy).toHaveBeenCalledWith('Video call initiated for:', 'Health & Wellness');
+    expect(consoleSpy).toHaveBeenCalledWith('Video call requested for category:', 'Health & Wellness');
+    expect(consoleSpy).toHaveBeenCalledWith('Category ID:', 1);
 
     consoleSpy.mockRestore();
   });
@@ -309,6 +310,213 @@ describe('CounselorCardGrid', () => {
     // Toast should appear
     await waitFor(() => {
       expect(screen.getByText('Coming Soon')).toBeInTheDocument();
+    });
+  });
+
+  // Video Call Tests
+  it('should show toast notification when video call button clicked', async () => {
+    const user = userEvent.setup();
+
+    renderWithToaster(<CounselorCardGrid />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Health & Wellness')).toBeInTheDocument();
+    });
+
+    const videoButtons = screen.getAllByRole('button', { name: /video call/i });
+    await user.click(videoButtons[0]);
+
+    // Check for toast notification
+    await waitFor(() => {
+      expect(screen.getByText('Coming Soon')).toBeInTheDocument();
+      expect(screen.getByText('Video calling will be available in the next update. Stay tuned!')).toBeInTheDocument();
+    });
+  });
+
+  it('should disable video button during loading state', async () => {
+    const user = userEvent.setup();
+
+    renderWithToaster(<CounselorCardGrid />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Health & Wellness')).toBeInTheDocument();
+    });
+
+    const videoButtons = screen.getAllByRole('button', { name: /video call/i });
+    const firstVideoButton = videoButtons[0];
+
+    // Button should not be disabled initially
+    expect(firstVideoButton).not.toBeDisabled();
+
+    // Click button
+    await user.click(firstVideoButton);
+
+    // Button should be disabled
+    await waitFor(() => {
+      expect(firstVideoButton).toBeDisabled();
+    });
+
+    // Button should show loading spinner
+    const loader = firstVideoButton.querySelector('.animate-spin');
+    expect(loader).toBeInTheDocument();
+
+    // Button should re-enable after timeout
+    await waitFor(() => {
+      expect(firstVideoButton).not.toBeDisabled();
+    }, { timeout: 5000 });
+  });
+
+  it('should prevent double-clicks on video button', async () => {
+    const user = userEvent.setup();
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    renderWithToaster(<CounselorCardGrid />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Health & Wellness')).toBeInTheDocument();
+    });
+
+    const videoButtons = screen.getAllByRole('button', { name: /video call/i });
+    const firstVideoButton = videoButtons[0];
+
+    // Click twice rapidly
+    await user.click(firstVideoButton);
+    
+    // Try to click again while disabled
+    await user.click(firstVideoButton);
+
+    // Should only log once (second click should be ignored because button is disabled)
+    const videoCallLogs = consoleSpy.mock.calls.filter(
+      call => call[0] === 'Video call requested for category:'
+    );
+    expect(videoCallLogs).toHaveLength(1);
+
+    consoleSpy.mockRestore();
+  });
+
+  it('should make video button accessible via keyboard', async () => {
+    const user = userEvent.setup();
+
+    renderWithToaster(<CounselorCardGrid />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Health & Wellness')).toBeInTheDocument();
+    });
+
+    const videoButtons = screen.getAllByRole('button', { name: /video call/i });
+    const firstVideoButton = videoButtons[0];
+
+    // Focus button
+    firstVideoButton.focus();
+    expect(firstVideoButton).toHaveFocus();
+
+    // Press Enter key
+    await user.keyboard('{Enter}');
+
+    // Toast should appear
+    await waitFor(() => {
+      expect(screen.getByText('Coming Soon')).toBeInTheDocument();
+    });
+  });
+
+  it('should trigger video button on Space key', async () => {
+    const user = userEvent.setup();
+
+    renderWithToaster(<CounselorCardGrid />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Health & Wellness')).toBeInTheDocument();
+    });
+
+    const videoButtons = screen.getAllByRole('button', { name: /video call/i });
+    const firstVideoButton = videoButtons[0];
+
+    // Focus button
+    firstVideoButton.focus();
+
+    // Press Space key
+    await user.keyboard(' ');
+
+    // Toast should appear
+    await waitFor(() => {
+      expect(screen.getByText('Coming Soon')).toBeInTheDocument();
+    });
+  });
+
+  it('should have independent loading states for voice and video buttons', async () => {
+    const user = userEvent.setup();
+
+    renderWithToaster(<CounselorCardGrid />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Health & Wellness')).toBeInTheDocument();
+    });
+
+    const voiceButtons = screen.getAllByRole('button', { name: /voice call/i });
+    const videoButtons = screen.getAllByRole('button', { name: /video call/i });
+
+    // Click voice button
+    await user.click(voiceButtons[0]);
+
+    // Voice should be disabled, video should still be enabled
+    await waitFor(() => {
+      expect(voiceButtons[0]).toBeDisabled();
+    });
+    expect(videoButtons[0]).not.toBeDisabled();
+  });
+
+  it('should allow clicking video on different cards independently', async () => {
+    const user = userEvent.setup();
+
+    renderWithToaster(<CounselorCardGrid />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Health & Wellness')).toBeInTheDocument();
+      expect(screen.getByText('Career Development')).toBeInTheDocument();
+    });
+
+    const videoButtons = screen.getAllByRole('button', { name: /video call/i });
+
+    // Click first card's video button
+    await user.click(videoButtons[0]);
+
+    // First button should be disabled
+    await waitFor(() => {
+      expect(videoButtons[0]).toBeDisabled();
+    });
+
+    // Other buttons should still be enabled
+    expect(videoButtons[1]).not.toBeDisabled();
+    expect(videoButtons[2]).not.toBeDisabled();
+  });
+
+  it('should allow both voice and video on same card sequentially', async () => {
+    const user = userEvent.setup();
+
+    renderWithToaster(<CounselorCardGrid />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Health & Wellness')).toBeInTheDocument();
+    });
+
+    const voiceButtons = screen.getAllByRole('button', { name: /voice call/i });
+    const videoButtons = screen.getAllByRole('button', { name: /video call/i });
+
+    // Click voice
+    await user.click(voiceButtons[0]);
+    await waitFor(() => {
+      expect(screen.getByText('Voice calling will be available in the next update. Stay tuned!')).toBeInTheDocument();
+    });
+
+    // Wait for voice loading to clear
+    await waitFor(() => {
+      expect(voiceButtons[0]).not.toBeDisabled();
+    }, { timeout: 5000 });
+
+    // Click video
+    await user.click(videoButtons[0]);
+    await waitFor(() => {
+      expect(screen.getByText('Video calling will be available in the next update. Stay tuned!')).toBeInTheDocument();
     });
   });
 });

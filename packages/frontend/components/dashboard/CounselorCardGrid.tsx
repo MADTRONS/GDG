@@ -6,11 +6,15 @@ import { Button } from '@/components/ui/button';
 import { CounselorCard } from './CounselorCard';
 import { CounselorCardSkeleton } from './CounselorCardSkeleton';
 import { getCategories, type CounselorCategory } from '@/lib/api';
+import { useToast } from '@/components/ui/use-toast';
 
 export function CounselorCardGrid() {
   const [categories, setCategories] = useState<CounselorCategory[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [loadingVoice, setLoadingVoice] = useState<string | null>(null);
+  const [loadingVideo, setLoadingVideo] = useState<string | null>(null);
+  const { toast } = useToast();
 
   const fetchCategories = async () => {
     try {
@@ -29,9 +33,24 @@ export function CounselorCardGrid() {
     fetchCategories();
   }, []);
 
-  const handleVoiceCall = (category: CounselorCategory) => {
-    console.log('Voice call initiated for:', category.name);
-    // TODO: Navigate to voice call session (Story 3.3)
+  const handleVoiceCall = async (category: CounselorCategory) => {
+    console.log('Voice call requested for category:', category.name);
+    console.log('Category ID:', category.id);
+    
+    // Set loading state
+    setLoadingVoice(category.id);
+    
+    // Show toast notification
+    toast({
+      title: "Coming Soon",
+      description: "Voice calling will be available in the next update. Stay tuned!",
+      duration: 4000,
+    });
+    
+    // Clear loading state after delay
+    setTimeout(() => {
+      setLoadingVoice(null);
+    }, 4000);
   };
 
   const handleVideoCall = (category: CounselorCategory) => {
@@ -75,8 +94,10 @@ export function CounselorCardGrid() {
         <CounselorCard
           key={category.id}
           category={category}
-          onVoiceCall={() => handleVoiceCall(category)}
-          onVideoCall={() => handleVideoCall(category)}
+          onVoiceCall={handleVoiceCall}
+          onVideoCall={handleVideoCall}
+          isVoiceLoading={loadingVoice === category.id}
+          isVideoLoading={loadingVideo === category.id}
         />
       ))}
     </div>

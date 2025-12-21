@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import { CounselorCardGrid } from '@/components/dashboard/CounselorCardGrid';
+import { Toaster } from '@/components/ui/toaster';
 
 const mockCategories = [
   {
@@ -44,6 +45,16 @@ afterEach(() => {
 afterEach(() => {
   server.close();
 });
+
+// Helper to render with toaster
+const renderWithToaster = (component: React.ReactElement) => {
+  return render(
+    <>
+      {component}
+      <Toaster />
+    </>
+  );
+};
 
 describe('CounselorCardGrid', () => {
   it('should show loading skeleton cards initially', () => {
@@ -136,7 +147,8 @@ describe('CounselorCardGrid', () => {
     // Click voice call button
     const voiceButtons = screen.getAllByRole('button', { name: /voice call/i });
     await user.click(voiceButtons[0]);
-    expect(consoleSpy).toHaveBeenCalledWith('Voice call initiated for:', 'Health & Wellness');
+    expect(consoleSpy).toHaveBeenCalledWith('Voice call requested for category:', 'Health & Wellness');
+    expect(consoleSpy).toHaveBeenCalledWith('Category ID:', 1);
 
     // Click video call button
     const videoButtons = screen.getAllByRole('button', { name: /video call/i });
@@ -144,5 +156,159 @@ describe('CounselorCardGrid', () => {
     expect(consoleSpy).toHaveBeenCalledWith('Video call initiated for:', 'Health & Wellness');
 
     consoleSpy.mockRestore();
+  });
+
+  it('should show toast notification when voice call button clicked', async () => {
+    const user = userEvent.setup();
+
+    renderWithToaster(<CounselorCardGrid />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Health & Wellness')).toBeInTheDocument();
+    });
+
+    const voiceButtons = screen.getAllByRole('button', { name: /voice call/i });
+    await user.click(voiceButtons[0]);
+
+    // Check for toast notification
+    await waitFor(() => {
+      expect(screen.getByText('Coming Soon')).toBeInTheDocument();
+      expect(screen.getByText('Voice calling will be available in the next update. Stay tuned!')).toBeInTheDocument();
+    });
+  });
+
+  it('should disable voice button during loading state', async () => {
+    const user = userEvent.setup();
+
+    renderWithToaster(<CounselorCardGrid />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Health & Wellness')).toBeInTheDocument();
+    });
+
+    const voiceButtons = screen.getAllByRole('button', { name: /voice call/i });
+    const firstVoiceButton = voiceButtons[0];
+
+    // Button should not be disabled initially
+    expect(firstVoiceButton).not.toBeDisabled();
+
+    // Click button
+    await user.click(firstVoiceButton);
+
+    // Button should be disabled
+    await waitFor(() => {
+      expect(firstVoiceButton).toBeDisabled();
+    });
+
+    // Button should show loading spinner
+    const loader = firstVoiceButton.querySelector('.animate-spin');
+    expect(loader).toBeInTheDocument();
+
+    // Button should re-enable after timeout
+    await waitFor(() => {
+      expect(firstVoiceButton).not.toBeDisabled();
+    }, { timeout: 5000 });
+  });
+
+  it('should prevent double-clicks on voice button', async () => {
+    const user = userEvent.setup();
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    renderWithToaster(<CounselorCardGrid />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Health & Wellness')).toBeInTheDocument();
+    });
+
+    const voiceButtons = screen.getAllByRole('button', { name: /voice call/i });
+    const firstVoiceButton = voiceButtons[0];
+
+    // Click twice rapidly
+    await user.click(firstVoiceButton);
+    
+    // Try to click again while disabled
+    await user.click(firstVoiceButton);
+
+    // Should only log once (second click should be ignored because button is disabled)
+    const voiceCallLogs = consoleSpy.mock.calls.filter(
+      call => call[0] === 'Voice call requested for category:'
+    );
+    expect(voiceCallLogs).toHaveLength(1);
+
+    consoleSpy.mockRestore();
+  });
+
+  it('should have independent loading states for each category card', async () => {
+    const user = userEvent.setup();
+
+    renderWithToaster(<CounselorCardGrid />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Health & Wellness')).toBeInTheDocument();
+      expect(screen.getByText('Career Development')).toBeInTheDocument();
+    });
+
+    const voiceButtons = screen.getAllByRole('button', { name: /voice call/i });
+
+    // Click first button
+    await user.click(voiceButtons[0]);
+
+    // First button should be disabled
+    await waitFor(() => {
+      expect(voiceButtons[0]).toBeDisabled();
+    });
+
+    // Other buttons should still be enabled
+    expect(voiceButtons[1]).not.toBeDisabled();
+    expect(voiceButtons[2]).not.toBeDisabled();
+  });
+
+  it('should make voice button accessible via keyboard', async () => {
+    const user = userEvent.setup();
+
+    renderWithToaster(<CounselorCardGrid />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Health & Wellness')).toBeInTheDocument();
+    });
+
+    const voiceButtons = screen.getAllByRole('button', { name: /voice call/i });
+    const firstVoiceButton = voiceButtons[0];
+
+    // Focus button
+    firstVoiceButton.focus();
+    expect(firstVoiceButton).toHaveFocus();
+
+    // Press Enter key
+    await user.keyboard('{Enter}');
+
+    // Toast should appear
+    await waitFor(() => {
+      expect(screen.getByText('Coming Soon')).toBeInTheDocument();
+    });
+  });
+
+  it('should trigger voice button on Space key', async () => {
+    const user = userEvent.setup();
+
+    renderWithToaster(<CounselorCardGrid />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Health & Wellness')).toBeInTheDocument();
+    });
+
+    const voiceButtons = screen.getAllByRole('button', { name: /voice call/i });
+    const firstVoiceButton = voiceButtons[0];
+
+    // Focus button
+    firstVoiceButton.focus();
+
+    // Press Space key
+    await user.keyboard(' ');
+
+    // Toast should appear
+    await waitFor(() => {
+      expect(screen.getByText('Coming Soon')).toBeInTheDocument();
+    });
   });
 });

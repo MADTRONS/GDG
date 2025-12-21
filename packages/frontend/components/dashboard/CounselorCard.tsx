@@ -2,7 +2,7 @@
 
 import { Card, CardHeader, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Mic, Video } from 'lucide-react';
+import { Mic, Video, Loader2 } from 'lucide-react';
 import { getIcon } from '@/lib/icons';
 import { CounselorCategory } from '@/lib/api';
 
@@ -10,9 +10,17 @@ interface CounselorCardProps {
   category: CounselorCategory;
   onVoiceCall: (category: CounselorCategory) => void;
   onVideoCall: (category: CounselorCategory) => void;
+  isVoiceLoading?: boolean;
+  isVideoLoading?: boolean;
 }
 
-export function CounselorCard({ category, onVoiceCall, onVideoCall }: CounselorCardProps) {
+export function CounselorCard({ 
+  category, 
+  onVoiceCall, 
+  onVideoCall,
+  isVoiceLoading = false,
+  isVideoLoading = false
+}: CounselorCardProps) {
   const Icon = getIcon(category.icon_name);
   
   return (
@@ -37,19 +45,29 @@ export function CounselorCard({ category, onVoiceCall, onVideoCall }: CounselorC
       <CardFooter className="flex gap-2 pt-4">
         <Button
           onClick={() => onVoiceCall(category)}
+          disabled={isVoiceLoading}
           className="flex-1 gap-2 bg-blue-600 hover:bg-blue-700"
           aria-label={`Start voice call with ${category.name} counselor`}
         >
-          <Mic className="h-4 w-4" />
+          {isVoiceLoading ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Mic className="h-4 w-4" />
+          )}
           Voice Call
         </Button>
         <Button
           onClick={() => onVideoCall(category)}
+          disabled={isVideoLoading}
           variant="outline"
           className="flex-1 gap-2 border-blue-600 text-blue-600 hover:bg-blue-50"
           aria-label={`Start video call with ${category.name} counselor`}
         >
-          <Video className="h-4 w-4" />
+          {isVideoLoading ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Video className="h-4 w-4" />
+          )}
           Video Call
         </Button>
       </CardFooter>

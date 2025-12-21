@@ -62,7 +62,7 @@ export function CounselorCardGrid() {
           headers: {
             'Content-Type': 'application/json',
           },
-          credentials: 'include', // Include auth cookie
+          credentials: 'include',
           body: JSON.stringify({
             counselor_category: category.id
           })

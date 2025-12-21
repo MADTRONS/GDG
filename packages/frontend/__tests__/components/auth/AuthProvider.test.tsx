@@ -139,7 +139,7 @@ describe('AuthProvider', () => {
       expect.objectContaining({ method: 'POST', credentials: 'include' })
     );
     expect(result.current.isAuthenticated).toBe(false);
-    expect(mockRouter.push).toHaveBeenCalledWith('/');
+    expect(mockRouter.push).toHaveBeenCalledWith('/?logout=true');
   });
 
   it('logout redirects even if API fails', async () => {
@@ -165,7 +165,7 @@ describe('AuthProvider', () => {
     });
 
     expect(result.current.isAuthenticated).toBe(false);
-    expect(mockRouter.push).toHaveBeenCalledWith('/');
+    expect(mockRouter.push).toHaveBeenCalledWith('/?logout=true');
   });
 
   it('throws error when useAuth used outside provider', () => {

@@ -10,6 +10,9 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { PhoneOff, Loader2, Mic, MicOff } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import type { ConnectionState } from '@/types/voice';
+import { TranscriptPanel } from '@/components/voice/TranscriptPanel';
+import { TranscriptEntry } from '@/types/transcript';
+import { v4 as uuidv4 } from 'uuid';
 
 function VoiceSessionContent() {
   const searchParams = useSearchParams();
@@ -27,10 +30,22 @@ function VoiceSessionContent() {
   const [isMuted, setIsMuted] = useState(false);
   const [showEndDialog, setShowEndDialog] = useState(false);
   const [permissionDenied, setPermissionDenied] = useState(false);
+  const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
 
   // Refs
   const dailyCallRef = useRef<any>(null);
   const hasConnected = useRef(false);
+
+  // Add transcript entry helper
+  const addTranscriptEntry = (speaker: 'user' | 'bot', text: string) => {
+    const entry: TranscriptEntry = {
+      id: uuidv4(),
+      timestamp: new Date(),
+      speaker,
+      text
+    };
+    setTranscript(prev => [...prev, entry]);
+  };
 
   // Validate params
   useEffect(() => {
@@ -81,6 +96,9 @@ function VoiceSessionContent() {
             title: "Connected",
             description: `You're now connected to ${category}. Start speaking!`
           });
+          
+          // Add welcome message to transcript
+          addTranscriptEntry('bot', `Hello! I'm here to help you with ${category.toLowerCase()}. How are you feeling today?`);
         });
 
         dailyCall.on('left-meeting', () => {
@@ -96,6 +114,27 @@ function VoiceSessionContent() {
             description: "Lost connection to the session. Please try reconnecting.",
             variant: "destructive"
           });
+        });
+
+        // Transcript event listeners (will be populated by backend bot in future)
+        dailyCall.on('app-message', (event: any) => {
+          try {
+            const data = event.data;
+            
+            // Handle user transcript events
+            if (data.type === 'user-transcript' && data.text) {
+              console.log('User transcript:', data.text);
+              addTranscriptEntry('user', data.text);
+            }
+            
+            // Handle bot transcript events
+            if (data.type === 'bot-transcript' && data.text) {
+              console.log('Bot transcript:', data.text);
+              addTranscriptEntry('bot', data.text);
+            }
+          } catch (error) {
+            console.error('Error processing app message:', error);
+          }
         });
 
         // Join the room
@@ -233,60 +272,130 @@ function VoiceSessionContent() {
   }
 
   return (
-    <div className="container mx-auto flex flex-col items-center justify-center min-h-screen p-4">
-      <Card className="w-full max-w-2xl">
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle>Voice Session: {category}</CardTitle>
-            {renderConnectionStatus()}
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {/* Audio visualization placeholder (Story 3.5 will add transcript) */}
-          <div className="flex items-center justify-center p-12 bg-muted rounded-lg">
-            <div className="text-center space-y-4">
-              <div className="text-6xl">
-                {isMuted ? <MicOff className="mx-auto" /> : <Mic className="mx-auto animate-pulse" />}
-              </div>
-              <p className="text-muted-foreground">
-                {connectionState === 'connected' 
-                  ? isMuted 
-                    ? 'Microphone muted. Click to unmute.'
-                    : 'Listening... Speak freely.'
-                  : 'Connecting...'}
-              </p>
+    <div className="container mx-auto min-h-screen p-4">
+      {/* Desktop layout: Side-by-side */}
+      <div className="hidden md:grid md:grid-cols-[1fr,400px] gap-4 h-[calc(100vh-2rem)]">
+        {/* Main session card */}
+        <Card className="flex flex-col">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle>Voice Session: {category}</CardTitle>
+              {renderConnectionStatus()}
             </div>
-          </div>
+          </CardHeader>
+          <CardContent className="flex-1 flex flex-col justify-between space-y-6">
+            {/* Audio visualization */}
+            <div className="flex items-center justify-center flex-1 bg-muted rounded-lg">
+              <div className="text-center space-y-4">
+                <div className="text-6xl">
+                  {isMuted ? <MicOff className="mx-auto" /> : <Mic className="mx-auto animate-pulse" />}
+                </div>
+                <p className="text-muted-foreground">
+                  {connectionState === 'connected' 
+                    ? isMuted 
+                      ? 'Microphone muted. Click to unmute.'
+                      : 'Listening... Speak freely.'
+                    : 'Connecting...'}
+                </p>
+              </div>
+            </div>
 
-          {/* Session controls */}
-          <div className="flex gap-3 justify-center">
-            <Button
-              onClick={toggleMute}
-              variant={isMuted ? 'destructive' : 'secondary'}
-              disabled={connectionState !== 'connected'}
-              className="flex-1 max-w-xs"
-            >
-              {isMuted ? <MicOff className="mr-2 h-4 w-4" /> : <Mic className="mr-2 h-4 w-4" />}
-              {isMuted ? 'Unmute' : 'Mute'}
-            </Button>
-            
-            <Button
-              onClick={() => setShowEndDialog(true)}
-              variant="destructive"
-              className="flex-1 max-w-xs"
-            >
-              <PhoneOff className="mr-2 h-4 w-4" />
-              End Session
-            </Button>
-          </div>
+            {/* Session controls */}
+            <div className="flex gap-3 justify-center">
+              <Button
+                onClick={toggleMute}
+                variant={isMuted ? 'destructive' : 'secondary'}
+                disabled={connectionState !== 'connected'}
+                className="flex-1 max-w-xs"
+              >
+                {isMuted ? <MicOff className="mr-2 h-4 w-4" /> : <Mic className="mr-2 h-4 w-4" />}
+                {isMuted ? 'Unmute' : 'Mute'}
+              </Button>
+              
+              <Button
+                onClick={() => setShowEndDialog(true)}
+                variant="destructive"
+                className="flex-1 max-w-xs"
+              >
+                <PhoneOff className="mr-2 h-4 w-4" />
+                End Session
+              </Button>
+            </div>
 
-          {/* Session info */}
-          <div className="text-xs text-muted-foreground text-center space-y-1">
-            <p>Session ID: {sessionId}</p>
-            <p>If you&apos;re in crisis, call 988 (Suicide & Crisis Lifeline) immediately.</p>
-          </div>
-        </CardContent>
-      </Card>
+            {/* Session info */}
+            <div className="text-xs text-muted-foreground text-center space-y-1">
+              <p>Session ID: {sessionId}</p>
+              <p>If you&apos;re in crisis, call 988 (Suicide & Crisis Lifeline) immediately.</p>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Transcript panel */}
+        <TranscriptPanel entries={transcript} />
+      </div>
+
+      {/* Mobile layout: Stacked */}
+      <div className="md:hidden flex flex-col gap-4">
+        {/* Session controls */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-lg">Voice Session: {category}</CardTitle>
+              {renderConnectionStatus()}
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Audio visualization */}
+            <div className="flex items-center justify-center p-8 bg-muted rounded-lg">
+              <div className="text-center space-y-3">
+                <div className="text-5xl">
+                  {isMuted ? <MicOff className="mx-auto" /> : <Mic className="mx-auto animate-pulse" />}
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  {connectionState === 'connected' 
+                    ? isMuted 
+                      ? 'Microphone muted'
+                      : 'Listening...'
+                    : 'Connecting...'}
+                </p>
+              </div>
+            </div>
+
+            {/* Session controls */}
+            <div className="flex gap-2">
+              <Button
+                onClick={toggleMute}
+                variant={isMuted ? 'destructive' : 'secondary'}
+                disabled={connectionState !== 'connected'}
+                className="flex-1"
+              >
+                {isMuted ? <MicOff className="mr-2 h-4 w-4" /> : <Mic className="mr-2 h-4 w-4" />}
+                {isMuted ? 'Unmute' : 'Mute'}
+              </Button>
+              
+              <Button
+                onClick={() => setShowEndDialog(true)}
+                variant="destructive"
+                className="flex-1"
+              >
+                <PhoneOff className="mr-2 h-4 w-4" />
+                End
+              </Button>
+            </div>
+
+            {/* Session info */}
+            <div className="text-xs text-muted-foreground text-center space-y-1">
+              <p>Session ID: {sessionId}</p>
+              <p>Crisis: Call 988</p>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Transcript panel (fixed height on mobile) */}
+        <div className="h-96">
+          <TranscriptPanel entries={transcript} />
+        </div>
+      </div>
 
       {/* End session confirmation dialog */}
       <AlertDialog open={showEndDialog} onOpenChange={setShowEndDialog}>

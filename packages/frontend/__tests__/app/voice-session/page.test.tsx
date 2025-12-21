@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import VoiceSessionPage from '@/app/voice-session/page';
 import { useSearchParams, useRouter } from 'next/navigation';
 import DailyIframe from '@daily-co/daily-js';
@@ -55,6 +55,16 @@ describe('VoiceSessionPage - Daily.co Connection', () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
+
+  // Helper to handle responsive layout (desktop + mobile render)
+  const getFirstMatch = (text: string | RegExp) => {
+    const matches = screen.queryAllByText(text);
+    return matches.length > 0 ? matches[0] : null;
+  };
+
+  const expectTextPresent = (text: string | RegExp) => {
+    expect(getFirstMatch(text)).toBeInTheDocument();
+  };
 
   describe('Parameter Validation', () => {
     it('redirects to dashboard when room_url is missing', async () => {
@@ -154,7 +164,7 @@ describe('VoiceSessionPage - Daily.co Connection', () => {
       render(<VoiceSessionPage />);
 
       await waitFor(() => {
-        expect(screen.getByText(/connecting to health counselor/i)).toBeInTheDocument();
+        expect(screen.getAllByText(/connecting to health counselor/i)[0]).toBeInTheDocument();
       });
     });
 
@@ -176,7 +186,7 @@ describe('VoiceSessionPage - Daily.co Connection', () => {
       render(<VoiceSessionPage />);
 
       await waitFor(() => {
-        expect(screen.getByText(/^connected$/i)).toBeInTheDocument();
+        expect(screen.getAllByText(/^connected$/i)[0]).toBeInTheDocument();
       });
 
       expect(mockToast).toHaveBeenCalledWith({
@@ -215,7 +225,7 @@ describe('VoiceSessionPage - Daily.co Connection', () => {
       render(<VoiceSessionPage />);
 
       await waitFor(() => {
-        expect(screen.getByText(/microphone access required/i)).toBeInTheDocument();
+        expect(screen.getAllByText(/microphone access required/i)[0]).toBeInTheDocument();
       });
 
       expect(mockToast).toHaveBeenCalledWith({
@@ -239,10 +249,10 @@ describe('VoiceSessionPage - Daily.co Connection', () => {
       render(<VoiceSessionPage />);
 
       await waitFor(() => {
-        expect(screen.getByText(/try again/i)).toBeInTheDocument();
+        expect(screen.getAllByText(/try again/i)[0]).toBeInTheDocument();
       });
 
-      const tryAgainButton = screen.getByRole('button', { name: /try again/i });
+      const tryAgainButton = screen.getAllByRole('button', { name: /try again/i })[0];
       fireEvent.click(tryAgainButton);
 
       expect(reloadMock).toHaveBeenCalled();
@@ -268,10 +278,10 @@ describe('VoiceSessionPage - Daily.co Connection', () => {
       render(<VoiceSessionPage />);
 
       await waitFor(() => {
-        expect(screen.getByText(/^connected$/i)).toBeInTheDocument();
+        expect(screen.getAllByText(/^connected$/i)[0]).toBeInTheDocument();
       });
 
-      const muteButton = screen.getByRole('button', { name: /^mute$/i });
+      const muteButton = screen.getAllByRole('button', { name: /^mute$/i })[0];
       fireEvent.click(muteButton);
 
       await waitFor(() => {
@@ -297,19 +307,19 @@ describe('VoiceSessionPage - Daily.co Connection', () => {
       render(<VoiceSessionPage />);
 
       await waitFor(() => {
-        expect(screen.getByText(/^connected$/i)).toBeInTheDocument();
+        expect(screen.getAllByText(/^connected$/i)[0]).toBeInTheDocument();
       });
 
       // Mute first
-      const muteButton = screen.getByRole('button', { name: /^mute$/i });
+      const muteButton = screen.getAllByRole('button', { name: /^mute$/i })[0];
       fireEvent.click(muteButton);
 
       await waitFor(() => {
-        expect(screen.getByRole('button', { name: /unmute/i })).toBeInTheDocument();
+        expect(screen.getAllByRole('button', { name: /unmute/i })[0]).toBeInTheDocument();
       });
 
       // Then unmute
-      const unmuteButton = screen.getByRole('button', { name: /unmute/i });
+      const unmuteButton = screen.getAllByRole('button', { name: /unmute/i })[0];
       fireEvent.click(unmuteButton);
 
       await waitFor(() => {
@@ -330,7 +340,7 @@ describe('VoiceSessionPage - Daily.co Connection', () => {
       render(<VoiceSessionPage />);
 
       await waitFor(() => {
-        const muteButton = screen.getByRole('button', { name: /mute/i });
+        const muteButton = screen.getAllByRole('button', { name: /mute/i })[0];
         expect(muteButton).toBeDisabled();
       });
     });
@@ -355,14 +365,14 @@ describe('VoiceSessionPage - Daily.co Connection', () => {
       render(<VoiceSessionPage />);
 
       await waitFor(() => {
-        expect(screen.getByText(/^connected$/i)).toBeInTheDocument();
+        expect(screen.getAllByText(/^connected$/i)[0]).toBeInTheDocument();
       });
 
-      const endButton = screen.getByRole('button', { name: /end session/i });
+      const endButton = screen.getAllByRole('button', { name: /end session/i })[0];
       fireEvent.click(endButton);
 
       await waitFor(() => {
-        expect(screen.getByText(/end voice session\?/i)).toBeInTheDocument();
+        expect(screen.getAllByText(/end voice session\?/i)[0]).toBeInTheDocument();
       });
     });
 
@@ -384,15 +394,15 @@ describe('VoiceSessionPage - Daily.co Connection', () => {
       render(<VoiceSessionPage />);
 
       await waitFor(() => {
-        expect(screen.getByText(/^connected$/i)).toBeInTheDocument();
+        expect(screen.getAllByText(/^connected$/i)[0]).toBeInTheDocument();
       });
 
       // Click end session
-      const endButton = screen.getByRole('button', { name: /end session/i });
+      const endButton = screen.getAllByRole('button', { name: /end session/i })[0];
       fireEvent.click(endButton);
 
       await waitFor(() => {
-        expect(screen.getByText(/end voice session\?/i)).toBeInTheDocument();
+        expect(screen.getAllByText(/end voice session\?/i)[0]).toBeInTheDocument();
       });
 
       // Confirm in dialog
@@ -425,19 +435,19 @@ describe('VoiceSessionPage - Daily.co Connection', () => {
       render(<VoiceSessionPage />);
 
       await waitFor(() => {
-        expect(screen.getByText(/^connected$/i)).toBeInTheDocument();
+        expect(screen.getAllByText(/^connected$/i)[0]).toBeInTheDocument();
       });
 
       // Click end session
-      const endButton = screen.getByRole('button', { name: /end session/i });
+      const endButton = screen.getAllByRole('button', { name: /end session/i })[0];
       fireEvent.click(endButton);
 
       await waitFor(() => {
-        expect(screen.getByText(/end voice session\?/i)).toBeInTheDocument();
+        expect(screen.getAllByText(/end voice session\?/i)[0]).toBeInTheDocument();
       });
 
       // Cancel
-      const cancelButton = screen.getByRole('button', { name: /stay in session/i });
+      const cancelButton = screen.getAllByRole('button', { name: /stay in session/i })[0];
       fireEvent.click(cancelButton);
 
       await waitFor(() => {
@@ -463,7 +473,7 @@ describe('VoiceSessionPage - Daily.co Connection', () => {
       render(<VoiceSessionPage />);
 
       await waitFor(() => {
-        expect(screen.getByText(/connection error/i)).toBeInTheDocument();
+        expect(screen.getAllByText(/connection error/i)[0]).toBeInTheDocument();
       });
 
       expect(mockToast).toHaveBeenCalledWith({
@@ -486,7 +496,7 @@ describe('VoiceSessionPage - Daily.co Connection', () => {
       render(<VoiceSessionPage />);
 
       await waitFor(() => {
-        expect(screen.getByText(/retry connection/i)).toBeInTheDocument();
+        expect(screen.getAllByText(/retry connection/i)[0]).toBeInTheDocument();
       });
     });
 
@@ -509,10 +519,10 @@ describe('VoiceSessionPage - Daily.co Connection', () => {
       render(<VoiceSessionPage />);
 
       await waitFor(() => {
-        expect(screen.getByText(/retry connection/i)).toBeInTheDocument();
+        expect(screen.getAllByText(/retry connection/i)[0]).toBeInTheDocument();
       });
 
-      const retryButton = screen.getByRole('button', { name: /retry connection/i });
+      const retryButton = screen.getAllByRole('button', { name: /retry connection/i })[0];
       fireEvent.click(retryButton);
 
       expect(reloadMock).toHaveBeenCalled();
@@ -535,7 +545,7 @@ describe('VoiceSessionPage - Daily.co Connection', () => {
       render(<VoiceSessionPage />);
 
       await waitFor(() => {
-        expect(screen.getByText(/disconnected/i)).toBeInTheDocument();
+        expect(screen.getAllByText(/disconnected/i)[0]).toBeInTheDocument();
       }, { timeout: 2000 });
     });
   });
@@ -554,7 +564,7 @@ describe('VoiceSessionPage - Daily.co Connection', () => {
       render(<VoiceSessionPage />);
 
       await waitFor(() => {
-        expect(screen.getByText(/session id: session-456/i)).toBeInTheDocument();
+        expect(screen.getAllByText(/session id: session-456/i)[0]).toBeInTheDocument();
       });
     });
 
@@ -571,7 +581,7 @@ describe('VoiceSessionPage - Daily.co Connection', () => {
       render(<VoiceSessionPage />);
 
       await waitFor(() => {
-        expect(screen.getByText(/988/i)).toBeInTheDocument();
+        expect(screen.getAllByText(/988/i)[0]).toBeInTheDocument();
       });
     });
 
@@ -588,7 +598,7 @@ describe('VoiceSessionPage - Daily.co Connection', () => {
       render(<VoiceSessionPage />);
 
       await waitFor(() => {
-        expect(screen.getByText(/voice session: health counselor/i)).toBeInTheDocument();
+        expect(screen.getAllByText(/voice session: health counselor/i)[0]).toBeInTheDocument();
       });
     });
 
@@ -614,7 +624,7 @@ describe('VoiceSessionPage - Daily.co Connection', () => {
       render(<VoiceSessionPage />);
 
       await waitFor(() => {
-        expect(screen.getByText(/voice session: counselor/i)).toBeInTheDocument();
+        expect(screen.getAllByText(/voice session: counselor/i)[0]).toBeInTheDocument();
       });
     });
   });
@@ -642,4 +652,147 @@ describe('VoiceSessionPage - Daily.co Connection', () => {
       expect(mockCallObject.destroy).toHaveBeenCalled();
     });
   });
+
+  describe('Transcript Functionality', () => {
+    it('displays empty transcript initially', async () => {
+      const mockCallObject = {
+        join: vi.fn().mockResolvedValue(undefined),
+        on: vi.fn(),
+        leave: vi.fn(),
+        destroy: vi.fn()
+      };
+
+      vi.mocked(DailyIframe.createCallObject).mockReturnValue(mockCallObject as any);
+
+      render(<VoiceSessionPage />);
+
+      await waitFor(() => {
+        expect(screen.getAllByText(/transcript will appear here/i)[0]).toBeInTheDocument();
+      });
+    });
+
+    it('adds welcome message to transcript on connection', async () => {
+      const mockCallObject = {
+        join: vi.fn().mockResolvedValue(undefined),
+        on: vi.fn((event, handler) => {
+          if (event === 'joined-meeting') {
+            handler();
+          }
+        }),
+        leave: vi.fn(),
+        destroy: vi.fn()
+      };
+
+      vi.mocked(DailyIframe.createCallObject).mockReturnValue(mockCallObject as any);
+
+      render(<VoiceSessionPage />);
+
+      await waitFor(() => {
+        expect(screen.getAllByText(/Hello! I'm here to help you/)[0]).toBeInTheDocument();
+        expect(screen.getAllByText('Counselor').length).toBeGreaterThan(0);
+      });
+    });
+
+    it('adds user transcript entries on app-message event', async () => {
+      const mockCallObject = {
+        join: vi.fn().mockResolvedValue(undefined),
+        on: vi.fn(),
+        leave: vi.fn(),
+        destroy: vi.fn()
+      };
+
+      vi.mocked(DailyIframe.createCallObject).mockReturnValue(mockCallObject as any);
+
+      render(<VoiceSessionPage />);
+
+      await waitFor(() => {
+        expect(mockCallObject.on).toHaveBeenCalledWith('app-message', expect.any(Function));
+      });
+
+      // Get the app-message handler
+      const appMessageHandler = mockCallObject.on.mock.calls.find(
+        call => call[0] === 'app-message'
+      )?.[1];
+
+      // Simulate user transcript event
+      appMessageHandler({ data: { type: 'user-transcript', text: 'Test user message' } });
+
+      await waitFor(() => {
+        expect(screen.getAllByText('Test user message')[0]).toBeInTheDocument();
+        expect(screen.getAllByText('You').length).toBeGreaterThan(0);
+      });
+    });
+
+    it('adds bot transcript entries on app-message event', async () => {
+      const mockCallObject = {
+        join: vi.fn().mockResolvedValue(undefined),
+        on: vi.fn(),
+        leave: vi.fn(),
+        destroy: vi.fn()
+      };
+
+      vi.mocked(DailyIframe.createCallObject).mockReturnValue(mockCallObject as any);
+
+      render(<VoiceSessionPage />);
+
+      await waitFor(() => {
+        expect(mockCallObject.on).toHaveBeenCalledWith('app-message', expect.any(Function));
+      });
+
+      // Get the app-message handler
+      const appMessageHandler = mockCallObject.on.mock.calls.find(
+        call => call[0] === 'app-message'
+      )?.[1];
+
+      // Simulate bot transcript event
+      appMessageHandler({ data: { type: 'bot-transcript', text: 'Test bot response' } });
+
+      await waitFor(() => {
+        expect(screen.getAllByText('Test bot response')[0]).toBeInTheDocument();
+        expect(screen.getAllByText('Counselor').length).toBeGreaterThan(0);
+      });
+    });
+
+    it('displays transcript panel title', async () => {
+      const mockCallObject = {
+        join: vi.fn().mockResolvedValue(undefined),
+        on: vi.fn(),
+        leave: vi.fn(),
+        destroy: vi.fn()
+      };
+
+      vi.mocked(DailyIframe.createCallObject).mockReturnValue(mockCallObject as any);
+
+      render(<VoiceSessionPage />);
+
+      await waitFor(() => {
+        expect(screen.getAllByText('Conversation Transcript')[0]).toBeInTheDocument();
+      });
+    });
+
+    it('transcript entries have timestamps', async () => {
+      const mockCallObject = {
+        join: vi.fn().mockResolvedValue(undefined),
+        on: vi.fn((event, handler) => {
+          if (event === 'joined-meeting') {
+            handler();
+          }
+        }),
+        leave: vi.fn(),
+        destroy: vi.fn()
+      };
+
+      vi.mocked(DailyIframe.createCallObject).mockReturnValue(mockCallObject as any);
+
+      render(<VoiceSessionPage />);
+
+      await waitFor(() => {
+        // Welcome message should have a timestamp (matches h:mm a format)
+        const timeElements = screen.getAllByText(/\d{1,2}:\d{2} [AP]M/);
+        expect(timeElements.length).toBeGreaterThan(0);
+      });
+    });
+  });
 });
+
+

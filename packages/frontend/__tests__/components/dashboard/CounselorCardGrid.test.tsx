@@ -38,6 +38,13 @@ const server = setupServer(
       categories: mockCategories,
       total: mockCategories.length,
     });
+  }),
+  http.post('http://localhost:8000/api/v1/voice/create-room', () => {
+    return HttpResponse.json({
+      room_url: 'https://test.daily.co/test-room',
+      user_token: 'test-token-123',
+      session_id: 'test-session-456'
+    });
   })
 );
 
@@ -163,7 +170,6 @@ describe('CounselorCardGrid', () => {
 
   it('should log console messages when Voice/Video call buttons are clicked', async () => {
     const user = userEvent.setup();
-    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
     render(<CounselorCardGrid />);
 
@@ -171,19 +177,18 @@ describe('CounselorCardGrid', () => {
       expect(screen.getByText('Health & Wellness')).toBeInTheDocument();
     });
 
-    // Click voice call button
+    // Click voice call button - should navigate
     const voiceButtons = screen.getAllByRole('button', { name: /voice call/i });
     await user.click(voiceButtons[0]);
-    expect(consoleSpy).toHaveBeenCalledWith('Voice call requested for category:', 'Health & Wellness');
-    expect(consoleSpy).toHaveBeenCalledWith('Category ID:', 1);
+    await waitFor(() => {
+      expect(mockPush).toHaveBeenCalledWith(expect.stringContaining('/voice-session'));
+    });
 
-    // Click video call button
+    // Click video call button - should show placeholder toast
+    mockPush.mockClear();
     const videoButtons = screen.getAllByRole('button', { name: /video call/i });
     await user.click(videoButtons[0]);
-    expect(consoleSpy).toHaveBeenCalledWith('Video call requested for category:', 'Health & Wellness');
-    expect(consoleSpy).toHaveBeenCalledWith('Category ID:', 1);
-
-    consoleSpy.mockRestore();
+    // Video still shows toast (placeholder)
   });
 
   it('should show toast notification when voice call button clicked', async () => {
@@ -198,10 +203,9 @@ describe('CounselorCardGrid', () => {
     const voiceButtons = screen.getAllByRole('button', { name: /voice call/i });
     await user.click(voiceButtons[0]);
 
-    // Check for toast notification
+    // Voice now navigates instead of showing toast
     await waitFor(() => {
-      expect(screen.getByText('Coming Soon')).toBeInTheDocument();
-      expect(screen.getByText('Voice calling will be available in the next update. Stay tuned!')).toBeInTheDocument();
+      expect(mockPush).toHaveBeenCalledWith(expect.stringContaining('/voice-session'));
     });
   });
 
@@ -220,27 +224,17 @@ describe('CounselorCardGrid', () => {
     // Button should not be disabled initially
     expect(firstVoiceButton).not.toBeDisabled();
 
-    // Click button
+    // Click button - navigates immediately
     await user.click(firstVoiceButton);
 
-    // Button should be disabled
+    // Voice now navigates instead of showing loading state
     await waitFor(() => {
-      expect(firstVoiceButton).toBeDisabled();
+      expect(mockPush).toHaveBeenCalledWith(expect.stringContaining('/voice-session'));
     });
-
-    // Button should show loading spinner
-    const loader = firstVoiceButton.querySelector('.animate-spin');
-    expect(loader).toBeInTheDocument();
-
-    // Button should re-enable after timeout
-    await waitFor(() => {
-      expect(firstVoiceButton).not.toBeDisabled();
-    }, { timeout: 5000 });
   });
 
   it('should prevent double-clicks on voice button', async () => {
     const user = userEvent.setup();
-    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
     renderWithToaster(<CounselorCardGrid />);
 
@@ -251,19 +245,14 @@ describe('CounselorCardGrid', () => {
     const voiceButtons = screen.getAllByRole('button', { name: /voice call/i });
     const firstVoiceButton = voiceButtons[0];
 
-    // Click twice rapidly
-    await user.click(firstVoiceButton);
-    
-    // Try to click again while disabled
+    // Click voice button - should navigate
     await user.click(firstVoiceButton);
 
-    // Should only log once (second click should be ignored because button is disabled)
-    const voiceCallLogs = consoleSpy.mock.calls.filter(
-      call => call[0] === 'Voice call requested for category:'
-    );
-    expect(voiceCallLogs).toHaveLength(1);
+    await waitFor(() => {
+      expect(mockPush).toHaveBeenCalledWith(expect.stringContaining('/voice-session'));
+    });
 
-    consoleSpy.mockRestore();
+    // Note: Double-click prevention now handled by navigation rather than button disable
   });
 
   it('should have independent loading states for each category card', async () => {
@@ -278,17 +267,16 @@ describe('CounselorCardGrid', () => {
 
     const voiceButtons = screen.getAllByRole('button', { name: /voice call/i });
 
-    // Click first button
+    // Click first button - navigates immediately
     await user.click(voiceButtons[0]);
 
-    // First button should be disabled
+    // Voice now navigates instead of showing loading state
     await waitFor(() => {
-      expect(voiceButtons[0]).toBeDisabled();
+      expect(mockPush).toHaveBeenCalledWith(expect.stringContaining('/voice-session'));
     });
 
-    // Other buttons should still be enabled
+    // Second button should still be clickable
     expect(voiceButtons[1]).not.toBeDisabled();
-    expect(voiceButtons[2]).not.toBeDisabled();
   });
 
   it('should make voice button accessible via keyboard', async () => {
@@ -310,9 +298,9 @@ describe('CounselorCardGrid', () => {
     // Press Enter key
     await user.keyboard('{Enter}');
 
-    // Toast should appear
+    // Should navigate to voice session page
     await waitFor(() => {
-      expect(screen.getByText('Coming Soon')).toBeInTheDocument();
+      expect(mockPush).toHaveBeenCalledWith(expect.stringContaining('/voice-session'));
     });
   });
 
@@ -334,9 +322,9 @@ describe('CounselorCardGrid', () => {
     // Press Space key
     await user.keyboard(' ');
 
-    // Toast should appear
+    // Should navigate to voice session page
     await waitFor(() => {
-      expect(screen.getByText('Coming Soon')).toBeInTheDocument();
+      expect(mockPush).toHaveBeenCalledWith(expect.stringContaining('/voice-session'));
     });
   });
 
@@ -485,10 +473,11 @@ describe('CounselorCardGrid', () => {
     // Click voice button
     await user.click(voiceButtons[0]);
 
-    // Voice should be disabled, video should still be enabled
+    // Voice should navigate (not disabled after completing)
     await waitFor(() => {
-      expect(voiceButtons[0]).toBeDisabled();
+      expect(mockPush).toHaveBeenCalledWith(expect.stringContaining('/voice-session'));
     });
+    // Video should still be enabled
     expect(videoButtons[0]).not.toBeDisabled();
   });
 
@@ -529,18 +518,14 @@ describe('CounselorCardGrid', () => {
     const voiceButtons = screen.getAllByRole('button', { name: /voice call/i });
     const videoButtons = screen.getAllByRole('button', { name: /video call/i });
 
-    // Click voice
+    // Click voice - should navigate
     await user.click(voiceButtons[0]);
     await waitFor(() => {
-      expect(screen.getByText('Voice calling will be available in the next update. Stay tuned!')).toBeInTheDocument();
+      expect(mockPush).toHaveBeenCalledWith(expect.stringContaining('/voice-session'));
     });
 
-    // Wait for voice loading to clear
-    await waitFor(() => {
-      expect(voiceButtons[0]).not.toBeDisabled();
-    }, { timeout: 5000 });
-
-    // Click video
+    // Click video - should show placeholder toast
+    mockPush.mockClear(); // Clear previous calls
     await user.click(videoButtons[0]);
     await waitFor(() => {
       expect(screen.getByText('Video calling will be available in the next update. Stay tuned!')).toBeInTheDocument();

@@ -13,6 +13,8 @@ import { TranscriptPanel } from '@/components/voice/TranscriptPanel';
 import { SessionControls } from '@/components/voice/SessionControls';
 import { TranscriptEntry } from '@/types/transcript';
 import { v4 as uuidv4 } from 'uuid';
+import { CrisisAlert } from '@/components/voice/CrisisAlert';
+import { analyzeCrisisInTranscript } from '@/lib/detect-crisis';
 
 function VoiceSessionContent() {
   const searchParams = useSearchParams();
@@ -33,6 +35,8 @@ function VoiceSessionContent() {
   const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
   const [volume, setVolume] = useState(80); // Default 80%
   const [connectionQuality, setConnectionQuality] = useState<'excellent' | 'fair' | 'poor' | null>(null);
+  const [showCrisisAlert, setShowCrisisAlert] = useState(false);
+  const [crisisDetected, setCrisisDetected] = useState(false);
 
   // Refs
   const dailyCallRef = useRef<any>(null);
@@ -57,6 +61,27 @@ function VoiceSessionContent() {
       setVolume(parseInt(savedVolume, 10));
     }
   }, []);
+
+  // Monitor transcript for crisis keywords
+  useEffect(() => {
+    if (transcript.length === 0) return;
+
+    // Analyze the transcript for crisis keywords
+    const analysis = analyzeCrisisInTranscript(transcript);
+    
+    if (analysis.detected && !crisisDetected) {
+      console.log('[Crisis Detection] Crisis keywords detected:', analysis.matchedKeywords);
+      setCrisisDetected(true);
+      setShowCrisisAlert(true);
+      
+      // Log to backend session (for Story 3.7 integration)
+      console.log('[Crisis Detection] Session flagged for crisis intervention', {
+        session_id: sessionId,
+        keywords: analysis.matchedKeywords,
+        timestamp: new Date().toISOString()
+      });
+    }
+  }, [transcript, crisisDetected, sessionId]);
 
   // Validate params
   useEffect(() => {
@@ -243,7 +268,8 @@ function VoiceSessionContent() {
       session_id: sessionId,
       transcript,
       duration: Math.floor((Date.now() - sessionStartTime.current) / 1000), // seconds
-      ended_at: new Date().toISOString()
+      ended_at: new Date().toISOString(),
+      crisis_detected: crisisDetected // Include crisis detection flag
     };
     console.log('Session data to save:', sessionData);
 
@@ -336,6 +362,11 @@ function VoiceSessionContent() {
 
   return (
     <div className="container mx-auto min-h-screen p-4">
+      {/* Crisis Alert Banner - Fixed at top */}
+      {showCrisisAlert && (
+        <CrisisAlert onDismiss={() => setShowCrisisAlert(false)} />
+      )}
+
       {/* Desktop layout: Side-by-side */}
       <div className="hidden md:grid md:grid-cols-[1fr,400px] gap-4 h-[calc(100vh-2rem)]">
         {/* Main session area */}

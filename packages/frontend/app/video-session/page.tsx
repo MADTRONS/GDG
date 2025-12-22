@@ -32,6 +32,13 @@ interface TranscriptMessage {
   timestamp: Date;
 }
 
+interface VideoQualityMetrics {
+  bitrateReadings: number[];
+  fpsReadings: number[];
+  packetLossEvents: number;
+  connectionQualityReadings: ConnectionQualityLevel[];
+}
+
 function VideoSessionContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -55,6 +62,13 @@ function VideoSessionContent() {
   const [showTranscript, setShowTranscript] = useState(true);
   const [avatarVideoTrack, setAvatarVideoTrack] = useState<MediaStreamTrack | null>(null);
   const [avatarAudioTrack, setAvatarAudioTrack] = useState<any>(null);
+  const [sessionStartTime] = useState<Date>(new Date());
+  const [qualityMetrics, setQualityMetrics] = useState<VideoQualityMetrics>({
+    bitrateReadings: [],
+    fpsReadings: [],
+    packetLossEvents: 0,
+    connectionQualityReadings: []
+  });
 
   // Refs
   const roomRef = useRef<Room | null>(null);
@@ -63,6 +77,8 @@ function VideoSessionContent() {
   const hasConnected = useRef(false);
   const avatarJoinTimeout = useRef<NodeJS.Timeout | null>(null);
   const localAudioTrackRef = useRef<any>(null);
+  const qualityMonitorInterval = useRef<NodeJS.Timeout | null>(null);
+  const sessionSaved = useRef(false);
 
   // Load volume from localStorage
   useEffect(() => {
@@ -97,6 +113,128 @@ function VideoSessionContent() {
       const { scrollTop, scrollHeight, clientHeight } = transcriptRef.current;
       const isAtBottom = scrollHeight - scrollTop - clientHeight < 10;
       setAutoScroll(isAtBottom);
+    }
+  };
+
+  // Calculate connection quality average
+  const calculateConnectionQualityAverage = (readings: ConnectionQualityLevel[]): string => {
+    if (readings.length === 0) return 'unknown';
+    
+    const qualityScores: Record<ConnectionQualityLevel, number> = {
+      'excellent': 4,
+      'good': 3,
+      'fair': 2,
+      'poor': 1
+    };
+    
+    const totalScore = readings.reduce((sum, quality) => {
+      return sum + qualityScores[quality];
+    }, 0);
+    
+    const avgScore = totalScore / readings.length;
+    
+    if (avgScore >= 3.5) return 'excellent';
+    if (avgScore >= 2.5) return 'good';
+    if (avgScore >= 1.5) return 'fair';
+    return 'poor';
+  };
+
+  // Save session function with retry logic
+  const saveSession = async (retryCount = 0): Promise<boolean> => {
+    if (sessionSaved.current) {
+      console.log('Session already saved');
+      return true;
+    }
+
+    const sessionEndTime = new Date();
+    const durationSeconds = Math.floor(
+      (sessionEndTime.getTime() - sessionStartTime.getTime()) / 1000
+    );
+
+    // Calculate average quality metrics
+    const avgBitrate = qualityMetrics.bitrateReadings.length > 0
+      ? qualityMetrics.bitrateReadings.reduce((a, b) => a + b, 0) / qualityMetrics.bitrateReadings.length
+      : 0;
+      
+    const avgFps = qualityMetrics.fpsReadings.length > 0
+      ? qualityMetrics.fpsReadings.reduce((a, b) => a + b, 0) / qualityMetrics.fpsReadings.length
+      : 0;
+      
+    const totalReadings = qualityMetrics.bitrateReadings.length;
+    const packetLossPercentage = totalReadings > 0
+      ? (qualityMetrics.packetLossEvents / totalReadings) * 100
+      : 0;
+
+    // Construct session payload
+    const sessionPayload = {
+      session_id: sessionId,
+      counselor_category: category,
+      mode: 'video',
+      start_time: sessionStartTime.toISOString(),
+      end_time: sessionEndTime.toISOString(),
+      duration_seconds: durationSeconds,
+      transcript: transcript.map(msg => ({
+        speaker: msg.speaker,
+        text: msg.text,
+        timestamp: msg.timestamp.toISOString()
+      })),
+      quality_metrics: {
+        average_bitrate: parseFloat(avgBitrate.toFixed(2)),
+        average_fps: parseFloat(avgFps.toFixed(2)),
+        packet_loss_percentage: parseFloat(packetLossPercentage.toFixed(2)),
+        connection_quality_average: calculateConnectionQualityAverage(qualityMetrics.connectionQualityReadings),
+        total_readings: totalReadings
+      }
+    };
+
+    try {
+      const response = await fetch('/api/v1/sessions/save', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify(sessionPayload)
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to save session: ${response.statusText} - ${errorText}`);
+      }
+
+      sessionSaved.current = true;
+      
+      const durationMinutes = Math.floor(durationSeconds / 60);
+      const durationSecondsRemainder = durationSeconds % 60;
+      
+      toast({
+        title: "Session Saved",
+        description: `Your video session (${durationMinutes}m ${durationSecondsRemainder}s) has been saved to your history.`,
+      });
+      
+      console.log('Session saved successfully');
+      return true;
+
+    } catch (error) {
+      console.error('Error saving session:', error);
+
+      // Retry logic with exponential backoff
+      if (retryCount < 3) {
+        const backoffDelay = Math.pow(2, retryCount) * 1000; // 1s, 2s, 4s
+        console.log(`Retrying save in ${backoffDelay}ms (attempt ${retryCount + 1}/3)`);
+        
+        await new Promise(resolve => setTimeout(resolve, backoffDelay));
+        return saveSession(retryCount + 1);
+      }
+
+      // All retries failed
+      toast({
+        title: "Failed to Save Session",
+        description: "Your session data couldn't be saved. Please contact support if this persists.",
+        variant: "destructive"
+      });
+      
+      return false;
     }
   };
 
@@ -191,6 +329,12 @@ function VideoSessionContent() {
               qualityLevel = 'fair';
           }
           setConnectionQuality(qualityLevel);
+          
+          // Track quality reading for session metrics
+          setQualityMetrics(prev => ({
+            ...prev,
+            connectionQualityReadings: [...prev.connectionQualityReadings, qualityLevel]
+          }));
         });
 
         room.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
@@ -222,14 +366,12 @@ function VideoSessionContent() {
           }
         });
 
-        room.on(RoomEvent.Disconnected, () => {
+        room.on(RoomEvent.Disconnected, async () => {
           console.log('Disconnected from room');
           setConnectionState('disconnected');
-        });
-
-        room.on(RoomEvent.ConnectionQualityChanged, (quality, participant) => {
-          console.log('Connection quality:', quality, 'for', participant.identity);
-          // Could update UI with quality indicator
+          
+          // Auto-save session on disconnect
+          await saveSession();
         });
 
         // Data received handler (for transcript)
@@ -289,8 +431,94 @@ function VideoSessionContent() {
     }
   }, [avatarVideoTrack]);
 
+  // Quality monitoring - track video metrics every 10 seconds
+  useEffect(() => {
+    if (!roomRef.current || connectionState !== 'connected') return;
+
+    const monitorQuality = async () => {
+      try {
+        const room = roomRef.current;
+        if (!room) return;
+
+        // Get stats from local participant
+        const stats = await room.localParticipant.getStats();
+        
+        stats.forEach((report) => {
+          // Track bitrate from outbound-rtp stats
+          if (report.type === 'outbound-rtp' && report.kind === 'video') {
+            const bytesSent = report.bytesSent || 0;
+            const timestamp = report.timestamp || Date.now();
+            
+            // Calculate bitrate in kbps
+            if (report.bytesSent !== undefined) {
+              const bitrate = (bytesSent * 8) / 1000; // Convert to kbps
+              setQualityMetrics(prev => ({
+                ...prev,
+                bitrateReadings: [...prev.bitrateReadings, bitrate]
+              }));
+            }
+            
+            // Track frame rate
+            if (report.framesPerSecond !== undefined) {
+              setQualityMetrics(prev => ({
+                ...prev,
+                fpsReadings: [...prev.fpsReadings, report.framesPerSecond]
+              }));
+            }
+            
+            // Track packet loss events
+            const packetsLost = report.packetsLost || 0;
+            if (packetsLost > 0) {
+              setQualityMetrics(prev => ({
+                ...prev,
+                packetLossEvents: prev.packetLossEvents + 1
+              }));
+            }
+          }
+        });
+      } catch (error) {
+        console.error('Failed to collect quality metrics:', error);
+      }
+    };
+
+    // Start monitoring interval
+    qualityMonitorInterval.current = setInterval(monitorQuality, 10000); // Every 10 seconds
+    
+    // Initial reading
+    monitorQuality();
+
+    // Cleanup on unmount
+    return () => {
+      if (qualityMonitorInterval.current) {
+        clearInterval(qualityMonitorInterval.current);
+        qualityMonitorInterval.current = null;
+      }
+    };
+  }, [connectionState]);
+
+  // Auto-save session on page unload
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (!sessionSaved.current && roomRef.current) {
+        saveSession();
+        // Show browser warning
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, []);
+
   // End session handler
   const handleEndSession = async () => {
+    // Save session before disconnecting
+    await saveSession();
+    
     if (roomRef.current) {
       await roomRef.current.disconnect();
     }

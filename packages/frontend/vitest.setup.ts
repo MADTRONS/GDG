@@ -14,6 +14,23 @@ global.ResizeObserver = class ResizeObserver {
   disconnect() {}
 };
 
+// Mock MediaStream for LiveKit tests
+global.MediaStream = class MediaStream {
+  constructor(tracks?: any[]) {
+    this.tracks = tracks || [];
+  }
+  tracks: any[];
+  getTracks() {
+    return this.tracks;
+  }
+  getAudioTracks() {
+    return this.tracks.filter((t: any) => t.kind === 'audio');
+  }
+  getVideoTracks() {
+    return this.tracks.filter((t: any) => t.kind === 'video');
+  }
+} as any;
+
 // Mock Next.js router
 vi.mock('next/navigation', () => ({
   useRouter: vi.fn(() => ({

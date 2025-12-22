@@ -4,11 +4,12 @@ from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, func, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.session import Session
+from app.models.counselor_category import CounselorCategory
 from app.repositories.session_repository import SessionRepository
 from app.schemas.session import (
     SaveSessionRequest,
@@ -16,7 +17,8 @@ from app.schemas.session import (
     SessionSummary,
     SessionDetail,
     SessionPreview,
-    SessionsListResponse
+    SessionsListResponse,
+    SessionStatsResponse
 )
 from app.utils.dependencies import get_current_user
 
@@ -355,3 +357,77 @@ async def delete_session(
     await db.commit()
     
     return None  # 204 No Content
+
+
+@router.get(
+    "/stats",
+    response_model=SessionStatsResponse,
+    summary="Get session statistics",
+    description="Get aggregated session statistics for the authenticated user including total sessions, hours, top category, and last session date."
+)
+async def get_session_stats(
+    current_user: dict[str, str] = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+) -> SessionStatsResponse:
+    """
+    Get aggregated session statistics for authenticated user.
+    
+    Returns:
+    - total_sessions: Count of all non-deleted sessions
+    - total_hours: Sum of session durations in hours
+    - top_category: Most frequently used counselor category
+    - top_category_icon: Icon for the top category
+    - last_session_date: Date of most recent session
+    """
+    # Base filter for user's non-deleted sessions
+    base_filter = and_(
+        Session.user_id == UUID(current_user["user_id"]),
+        Session.deleted_at.is_(None)
+    )
+    
+    # Total sessions count
+    count_query = select(func.count(Session.id)).where(base_filter)
+    total_result = await db.execute(count_query)
+    total_sessions = total_result.scalar() or 0
+    
+    # Total hours (sum of duration_seconds converted to hours)
+    hours_query = select(func.sum(Session.duration_seconds)).where(base_filter)
+    hours_result = await db.execute(hours_query)
+    total_seconds = hours_result.scalar() or 0
+    total_hours = round(total_seconds / 3600, 1) if total_seconds else 0.0
+    
+    # Most used category
+    category_query = (
+        select(
+            CounselorCategory.name,
+            CounselorCategory.icon_name,
+            func.count(Session.id).label('count')
+        )
+        .join(CounselorCategory, Session.counselor_category == CounselorCategory.name)
+        .where(base_filter)
+        .group_by(CounselorCategory.id, CounselorCategory.name, CounselorCategory.icon_name)
+        .order_by(desc('count'))
+        .limit(1)
+    )
+    category_result = await db.execute(category_query)
+    top_category_row = category_result.first()
+    
+    top_category = None
+    top_category_icon = None
+    if top_category_row:
+        top_category = top_category_row[0]
+        top_category_icon = top_category_row[1]
+    
+    # Last session date
+    date_query = select(func.max(Session.started_at)).where(base_filter)
+    date_result = await db.execute(date_query)
+    last_session = date_result.scalar()
+    last_session_date = last_session.isoformat() if last_session else None
+    
+    return SessionStatsResponse(
+        total_sessions=total_sessions,
+        total_hours=total_hours,
+        top_category=top_category,
+        top_category_icon=top_category_icon,
+        last_session_date=last_session_date
+    )

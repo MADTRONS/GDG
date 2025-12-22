@@ -4,6 +4,7 @@ import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
 import { DashboardFooter } from '@/components/dashboard/DashboardFooter';
 import { CounselorCardGrid } from '@/components/dashboard/CounselorCardGrid';
+import { StatsWidget } from '@/components/StatsWidget';
 
 export default function DashboardPage() {
   return (
@@ -24,7 +25,10 @@ export default function DashboardPage() {
           role="main"
           aria-label="Counselor categories"
         >
-          <CounselorCardGrid />
+          <div className="space-y-8">
+            <StatsWidget />
+            <CounselorCardGrid />
+          </div>
         </main>
         
         <DashboardFooter />

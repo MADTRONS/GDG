@@ -35,6 +35,15 @@ class SaveSessionResponse(BaseModel):
     message: str
 
 
+class SessionStatsResponse(BaseModel):
+    """Response schema for session statistics."""
+    total_sessions: int
+    total_hours: float
+    top_category: Optional[str] = None
+    top_category_icon: Optional[str] = None
+    last_session_date: Optional[str] = None
+
+
 class SessionSummary(BaseModel):
     """Summary of a counseling session."""
     session_id: UUID

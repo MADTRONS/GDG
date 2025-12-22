@@ -1,0 +1,74 @@
+schema: 1
+story: "5.4"
+story_title: "Session Detail Page with Full Transcript"
+gate: "CONCERNS"
+status_reason: "Functional implementation complete and ACs met, but test reliability at 45% requires attention before production."
+reviewer: "Quinn (Test Architect)"
+updated: "2025-12-22T20:16:00Z"
+
+waiver: { active: false }
+
+top_issues:
+  - id: "TEST-001"
+    severity: medium
+    finding: "Only 5/11 tests (45%) passing - timing issues with async fetch mocking in jsdom environment"
+    suggested_action: "Refactor test mocking strategy, add act() wrappers, or increase test environment timeouts"
+  
+  - id: "TEST-002"
+    severity: low
+    finding: "No integration or E2E tests for critical user journey"
+    suggested_action: "Add Playwright tests for sessions list  detail  back navigation flow"
+  
+  - id: "ARCH-001"
+    severity: low
+    finding: "Hardcoded API path '/api/v1/sessions' without base URL constant"
+    suggested_action: "Create API_BASE_URL constant for easier endpoint management"
+  
+  - id: "CODE-001"
+    severity: low
+    finding: "console.error in production code (line 81)"
+    suggested_action: "Replace with proper logging service or conditional dev-only logging"
+
+risk_summary:
+  totals: { critical: 0, high: 0, medium: 1, low: 3 }
+  recommendations:
+    must_fix:
+      - "Stabilize test suite to >80% pass rate before production deployment"
+    monitor:
+      - "Performance impact of loading full transcripts (consider pagination for long sessions)"
+      - "Test flakiness in CI/CD pipeline"
+
+# Quality assessment details
+quality_score: 75
+evidence:
+  tests_reviewed: 11
+  tests_passing: 5
+  risks_identified: 4
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7, 8]
+    ac_gaps: []
+
+nfr_validation:
+  security: { status: PASS, notes: "Auth required, session ownership validated, 403/404 handled" }
+  performance: { status: CONCERNS, notes: "No pagination - full transcript loaded. May impact large sessions." }
+  reliability: { status: PASS, notes: "Comprehensive error handling, graceful degradation" }
+  maintainability: { status: PASS, notes: "Clean TypeScript, good component structure, proper interfaces" }
+
+# Recommendations
+recommendations:
+  immediate:
+    - action: "Fix test timing issues - refactor mocking or use waitForElementToBeRemoved"
+      refs: ["packages/frontend/app/sessions/[sessionId]/__tests__/page.test.tsx"]
+    - action: "Add integration test for full user journey"
+      refs: ["e2e/sessions.spec.ts (to be created)"]
+  
+  before_production:
+    - action: "Consider transcript pagination for sessions > 100 messages"
+      refs: ["packages/frontend/app/sessions/[sessionId]/page.tsx:206-220"]
+    - action: "Replace console.error with proper logging"
+      refs: ["packages/frontend/app/sessions/[sessionId]/page.tsx:81"]
+  
+  future_improvements:
+    - action: "Add loading skeleton for better perceived performance"
+    - action: "Implement virtual scrolling for very long transcripts"
+    - action: "Add transcript search functionality"

@@ -1,17 +1,31 @@
 """
 Beyond Presence Avatar Agent for Video Counseling Sessions.
-Uses Gemini AI + LiveKit + Beyond Presence Avatar.
+Uses Gemini AI + LiveKit + Beyond Presence Avatar with emotional expressions.
 """
 
 import asyncio
 import os
 import sys
 import json
+import time
 from typing import Optional
 from loguru import logger
 import google.generativeai as genai
 from livekit import rtc, api
 import websockets
+
+from avatar_config import (
+    EXPRESSION_PRESETS,
+    EmotionalExpression,
+    EYE_CONTACT_CONFIG,
+    LIP_SYNC_CONFIG,
+    TRANSITION_CONFIG,
+    QUALITY_ADAPTATION_CONFIG,
+    CRISIS_KEYWORDS,
+    POSITIVE_KEYWORDS,
+    AVATAR_CONFIG,
+)
+from beyond_presence import AvatarSession
 
 # Configure logging
 logger.remove()
@@ -19,7 +33,7 @@ logger.add(sys.stderr, level="INFO", format="<green>{time:HH:mm:ss}</green> | <l
 
 
 class BeyondPresenceAvatarAgent:
-    """Video avatar agent using Gemini AI, LiveKit, and Beyond Presence."""
+    """Video avatar agent using Gemini AI, LiveKit, and Beyond Presence with emotional expressions."""
     
     def __init__(self):
         """Initialize agent with environment configuration."""
@@ -44,7 +58,11 @@ class BeyondPresenceAvatarAgent:
         
         # Initialize components
         self.room: Optional[rtc.Room] = None
+        self.avatar_session: Optional[AvatarSession] = None
         self.conversation_history = []
+        self.current_expression = EmotionalExpression.NEUTRAL_LISTENING
+        self.last_expression_change = 0
+        self.quality_monitor_task: Optional[asyncio.Task] = None
         
         logger.info(f"=== Initializing Beyond Presence Avatar Agent ===")
         logger.info(f"Session ID: {self.session_id}")
@@ -126,20 +144,36 @@ class BeyondPresenceAvatarAgent:
         logger.debug(f"System prompt length: {len(self.system_prompt)} characters")
     
     async def initialize_avatar(self):
-        """Initialize Beyond Presence avatar connection."""
+        """Initialize Beyond Presence avatar connection with emotional expressions."""
         logger.info("Initializing Beyond Presence avatar...")
         logger.info(f"Using Avatar ID: {self.avatar_id}")
         
-        # Note: Beyond Presence integration would go here
-        # This is a placeholder for actual Beyond Presence SDK integration
-        # The avatar rendering would typically involve:
-        # 1. WebSocket connection to Beyond Presence service
-        # 2. Sending avatar configuration (ID, API key)
-        # 3. Streaming avatar video frames to LiveKit
-        # 4. Syncing lip movements with audio
+        # Initialize avatar session with expression config
+        self.avatar_session = AvatarSession(
+            avatar_id=self.avatar_id,
+            api_key=self.avatar_api_key,
+            # Lip-sync configuration
+            lip_sync=LIP_SYNC_CONFIG,
+            # Eye contact configuration
+            eye_contact=EYE_CONTACT_CONFIG,
+            # Quality settings
+            video_config={
+                "resolution": "720p",
+                "fps": 30,
+                "bitrate": 2000,  # kbps
+            },
+            # Enable expression system
+            enable_expressions=True,
+            expression_presets=EXPRESSION_PRESETS,
+            transition_config=TRANSITION_CONFIG,
+        )
         
-        logger.warning("Beyond Presence avatar integration is placeholder - SDK integration pending")
-        logger.info("Avatar initialized (placeholder mode)")
+        await self.avatar_session.connect()
+        logger.info("Avatar session connected")
+        
+        # Set initial expression (supportive for counseling)
+        await self.set_expression(EmotionalExpression.SUPPORTIVE)
+        logger.info("Avatar initialized with emotional expression system")
     
     async def send_greeting(self):
         """Send category-appropriate greeting to student."""
@@ -193,15 +227,103 @@ class BeyondPresenceAvatarAgent:
         """Convert text to speech and publish as audio track."""
         logger.info(f"Publishing audio: {text[:50]}...")
         
+        # Analyze sentiment before speaking
+        await self.analyze_sentiment_and_express(text)
+        
         # Note: This would integrate with Google TTS or another TTS service
         # For now, this is a placeholder
         # Actual implementation would:
         # 1. Convert text to speech using Google TTS API
         # 2. Create audio track from TTS output
         # 3. Publish to LiveKit room
-        # 4. Sync with Beyond Presence avatar lip movements
+        # 4. Sync with Beyond Presence avatar lip movements via avatar_session.speak()
         
         logger.warning("TTS audio publishing is placeholder - requires Google TTS integration")
+    
+    async def set_expression(self, expression: EmotionalExpression):
+        """Change avatar emotional expression with smooth transition"""
+        if not self.avatar_session:
+            logger.warning("Cannot set expression: avatar session not initialized")
+            return
+            
+        # Prevent rapid expression changes
+        current_time = time.time()
+        min_interval = TRANSITION_CONFIG["min_interval_ms"] / 1000.0
+        
+        if current_time - self.last_expression_change < min_interval:
+            logger.debug(f"Skipping expression change (too soon): {expression.value}")
+            return
+            
+        logger.info(f"Changing expression: {self.current_expression.value} -> {expression.value}")
+        
+        preset = EXPRESSION_PRESETS[expression]
+        await self.avatar_session.set_expression(
+            facial_config=preset["facial_config"],
+            body_language=preset["body_language"],
+            animation=preset["animation"],
+            transition_duration=TRANSITION_CONFIG["duration_ms"]
+        )
+        
+        self.current_expression = expression
+        self.last_expression_change = current_time
+        
+    async def analyze_sentiment_and_express(self, text: str):
+        """Analyze text sentiment and trigger appropriate expression"""
+        text_lower = text.lower()
+        
+        # Crisis keywords -> concerned expression
+        if any(keyword in text_lower for keyword in CRISIS_KEYWORDS):
+            logger.warning(f"Crisis keyword detected in text: {text[:50]}...")
+            await self.set_expression(EmotionalExpression.CONCERNED)
+            return
+            
+        # Positive progress keywords -> encouraging expression
+        if any(keyword in text_lower for keyword in POSITIVE_KEYWORDS):
+            logger.info(f"Positive keyword detected in text: {text[:50]}...")
+            await self.set_expression(EmotionalExpression.ENCOURAGING)
+            return
+            
+        # Default: supportive expression
+        if self.current_expression != EmotionalExpression.SUPPORTIVE:
+            await self.set_expression(EmotionalExpression.SUPPORTIVE)
+            
+    async def monitor_video_quality(self):
+        """Monitor video quality and adapt avatar complexity"""
+        logger.info("Starting video quality monitoring")
+        
+        while True:
+            try:
+                if not self.avatar_session:
+                    await asyncio.sleep(5)
+                    continue
+                    
+                stats = await self.avatar_session.get_stats()
+                bitrate = stats.get("bitrate_kbps", 2000)
+                fps = stats.get("fps", 30)
+                
+                # Check if quality is degrading
+                if (bitrate < QUALITY_ADAPTATION_CONFIG["bitrate_threshold_low"] or
+                    fps < QUALITY_ADAPTATION_CONFIG["fps_threshold_low"]):
+                    
+                    logger.warning(f"Low video quality detected: {bitrate}kbps, {fps}fps")
+                    
+                    # Reduce animation complexity
+                    if QUALITY_ADAPTATION_CONFIG["reduce_secondary_animations"]:
+                        await self.avatar_session.set_animation_quality("low")
+                        logger.info("Reduced avatar animation complexity to maintain frame rate")
+                        
+                else:
+                    # Restore full quality
+                    await self.avatar_session.set_animation_quality("high")
+                    
+                await asyncio.sleep(5)  # Check every 5 seconds
+                
+            except asyncio.CancelledError:
+                logger.info("Quality monitoring task cancelled")
+                break
+            except Exception as e:
+                logger.error(f"Error in quality monitoring: {e}")
+                await asyncio.sleep(5)
     
     async def _handle_audio_track(self, track: rtc.AudioTrack, participant: rtc.RemoteParticipant):
         """Handle incoming audio from student."""
@@ -227,6 +349,10 @@ class BeyondPresenceAvatarAgent:
             self.initialize_gemini()
             await self.initialize_avatar()
             
+            # Start quality monitoring task
+            self.quality_monitor_task = asyncio.create_task(self.monitor_video_quality())
+            logger.info("Started video quality monitoring task")
+            
             # Wait for student to join
             logger.info("Waiting for student to join...")
             await asyncio.sleep(2)  # Give time for participant to connect
@@ -236,7 +362,7 @@ class BeyondPresenceAvatarAgent:
             
             # Keep session active
             logger.info("Avatar agent active and ready for conversation")
-            logger.info("Conversation loop started (placeholder mode)")
+            logger.info("Conversation loop started with emotional expression support")
             
             # Stay connected until room is disconnected
             while self.room and self.room.connection_state == rtc.ConnectionState.CONN_CONNECTED:
@@ -254,6 +380,19 @@ class BeyondPresenceAvatarAgent:
         """Clean up resources."""
         logger.info("Cleaning up resources...")
         
+        # Cancel quality monitoring task
+        if self.quality_monitor_task:
+            self.quality_monitor_task.cancel()
+            try:
+                await self.quality_monitor_task
+            except asyncio.CancelledError:
+                pass
+        
+        # Disconnect avatar session
+        if self.avatar_session:
+            await self.avatar_session.disconnect()
+        
+        # Disconnect LiveKit room
         if self.room:
             await self.room.disconnect()
         

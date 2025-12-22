@@ -18,13 +18,17 @@ import {
   Volume1,
   Wifi,
   WifiOff,
-  MessageSquare
+  MessageSquare,
+  AlertTriangle,
+  Video as VideoIcon
 } from 'lucide-react';
+import AudioWaveform from '@/components/AudioWaveform';
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
 import type { ConnectionState } from '@/types/video';
 
 type ConnectionQualityLevel = 'excellent' | 'good' | 'fair' | 'poor';
+type VideoMode = 'video' | 'voice-only';
 
 interface TranscriptMessage {
   speaker: 'user' | 'counselor';
@@ -32,11 +36,28 @@ interface TranscriptMessage {
   timestamp: Date;
 }
 
+interface QualityReading {
+  timestamp: number;
+  bitrate: number;
+  fps: number;
+  packetLoss: number;
+  connectionQuality: string;
+}
+
+interface DegradationEvent {
+  timestamp: Date;
+  reason: string;
+  userChoice?: 'voice-only' | 'keep-trying';
+  retryAttempt?: number;
+}
+
 interface VideoQualityMetrics {
   bitrateReadings: number[];
   fpsReadings: number[];
   packetLossEvents: number;
   connectionQualityReadings: ConnectionQualityLevel[];
+  qualityReadings: QualityReading[];
+  degradationEvents: DegradationEvent[];
 }
 
 function VideoSessionContent() {
@@ -67,8 +88,15 @@ function VideoSessionContent() {
     bitrateReadings: [],
     fpsReadings: [],
     packetLossEvents: 0,
-    connectionQualityReadings: []
+    connectionQualityReadings: [],
+    qualityReadings: [],
+    degradationEvents: []
   });
+  const [videoMode, setVideoMode] = useState<VideoMode>('video');
+  const [showDegradationAlert, setShowDegradationAlert] = useState(false);
+  const [degradationReason, setDegradationReason] = useState<string>('');
+  const [videoRetryCount, setVideoRetryCount] = useState(0);
+  const [cooldownActive, setCooldownActive] = useState(false);
 
   // Refs
   const roomRef = useRef<Room | null>(null);
@@ -79,6 +107,8 @@ function VideoSessionContent() {
   const localAudioTrackRef = useRef<any>(null);
   const qualityMonitorInterval = useRef<NodeJS.Timeout | null>(null);
   const sessionSaved = useRef(false);
+  const cooldownTimeout = useRef<NodeJS.Timeout | null>(null);
+  const degradationCheckInterval = useRef<NodeJS.Timeout | null>(null);
 
   // Load volume from localStorage
   useEffect(() => {
@@ -169,7 +199,7 @@ function VideoSessionContent() {
     const sessionPayload = {
       session_id: sessionId,
       counselor_category: category,
-      mode: 'video',
+      mode: videoMode === 'voice-only' ? 'voice' : 'video',
       start_time: sessionStartTime.toISOString(),
       end_time: sessionEndTime.toISOString(),
       duration_seconds: durationSeconds,
@@ -183,7 +213,15 @@ function VideoSessionContent() {
         average_fps: parseFloat(avgFps.toFixed(2)),
         packet_loss_percentage: parseFloat(packetLossPercentage.toFixed(2)),
         connection_quality_average: calculateConnectionQualityAverage(qualityMetrics.connectionQualityReadings),
-        total_readings: totalReadings
+        total_readings: totalReadings,
+        degradation_events: qualityMetrics.degradationEvents.map(event => ({
+          timestamp: event.timestamp.toISOString(),
+          reason: event.reason,
+          user_choice: event.userChoice,
+          retry_attempt: event.retryAttempt
+        })),
+        video_mode: videoMode,
+        video_retry_count: videoRetryCount
       }
     };
 
@@ -431,9 +469,9 @@ function VideoSessionContent() {
     }
   }, [avatarVideoTrack]);
 
-  // Quality monitoring - track video metrics every 10 seconds
+  // Quality monitoring - track video metrics every 5 seconds
   useEffect(() => {
-    if (!roomRef.current || connectionState !== 'connected') return;
+    if (!roomRef.current || connectionState !== 'connected' || videoMode === 'voice-only') return;
 
     const monitorQuality = async () => {
       try {
@@ -442,16 +480,18 @@ function VideoSessionContent() {
 
         // Get stats from local participant
         const stats = await room.localParticipant.getStats();
+        let bitrate = 0;
+        let fps = 0;
+        let packetLoss = 0;
         
         stats.forEach((report) => {
           // Track bitrate from outbound-rtp stats
           if (report.type === 'outbound-rtp' && report.kind === 'video') {
             const bytesSent = report.bytesSent || 0;
-            const timestamp = report.timestamp || Date.now();
             
             // Calculate bitrate in kbps
             if (report.bytesSent !== undefined) {
-              const bitrate = (bytesSent * 8) / 1000; // Convert to kbps
+              bitrate = (bytesSent * 8) / 1000; // Convert to kbps
               setQualityMetrics(prev => ({
                 ...prev,
                 bitrateReadings: [...prev.bitrateReadings, bitrate]
@@ -460,14 +500,17 @@ function VideoSessionContent() {
             
             // Track frame rate
             if (report.framesPerSecond !== undefined) {
+              fps = report.framesPerSecond;
               setQualityMetrics(prev => ({
                 ...prev,
                 fpsReadings: [...prev.fpsReadings, report.framesPerSecond]
               }));
             }
             
-            // Track packet loss events
+            // Track packet loss
             const packetsLost = report.packetsLost || 0;
+            const packetsSent = report.packetsSent || 1;
+            packetLoss = (packetsLost / packetsSent) * 100;
             if (packetsLost > 0) {
               setQualityMetrics(prev => ({
                 ...prev,
@@ -476,13 +519,30 @@ function VideoSessionContent() {
             }
           }
         });
+
+        const connectionQualityStr = room.localParticipant.connectionQuality?.toString() || 'unknown';
+
+        // Add quality reading
+        const reading: QualityReading = {
+          timestamp: Date.now(),
+          bitrate,
+          fps,
+          packetLoss,
+          connectionQuality: connectionQualityStr
+        };
+
+        setQualityMetrics(prev => ({
+          ...prev,
+          qualityReadings: [...prev.qualityReadings, reading].slice(-3) // Keep last 3 readings (15 seconds)
+        }));
+        
       } catch (error) {
         console.error('Failed to collect quality metrics:', error);
       }
     };
 
     // Start monitoring interval
-    qualityMonitorInterval.current = setInterval(monitorQuality, 10000); // Every 10 seconds
+    qualityMonitorInterval.current = setInterval(monitorQuality, 5000); // Every 5 seconds
     
     // Initial reading
     monitorQuality();
@@ -494,7 +554,45 @@ function VideoSessionContent() {
         qualityMonitorInterval.current = null;
       }
     };
-  }, [connectionState]);
+  }, [connectionState, videoMode]);
+
+  // Check for degradation conditions
+  useEffect(() => {
+    if (videoMode === 'voice-only' || cooldownActive || qualityMetrics.qualityReadings.length < 3) return;
+
+    const readings = qualityMetrics.qualityReadings;
+    const avgBitrate = readings.reduce((sum, r) => sum + r.bitrate, 0) / readings.length;
+    const avgFps = readings.reduce((sum, r) => sum + r.fps, 0) / readings.length;
+    const avgPacketLoss = readings.reduce((sum, r) => sum + r.packetLoss, 0) / readings.length;
+    const poorQualityCount = readings.filter(r => r.connectionQuality === 'poor').length;
+
+    let reason = '';
+
+    if (avgBitrate > 0 && avgBitrate < 500) {
+      reason = `Low bitrate (${avgBitrate.toFixed(0)} kbps, need 500+ kbps)`;
+    } else if (avgFps > 0 && avgFps < 15) {
+      reason = `Low frame rate (${avgFps.toFixed(1)} fps, need 15+ fps)`;
+    } else if (avgPacketLoss > 10) {
+      reason = `High packet loss (${avgPacketLoss.toFixed(1)}%, need <10%)`;
+    } else if (poorQualityCount >= 2) {
+      reason = 'Poor connection quality';
+    }
+
+    if (reason) {
+      console.log('Degradation detected:', reason);
+      setDegradationReason(reason);
+      setShowDegradationAlert(true);
+      
+      // Log event
+      setQualityMetrics(prev => ({
+        ...prev,
+        degradationEvents: [
+          ...prev.degradationEvents,
+          { timestamp: new Date(), reason }
+        ]
+      }));
+    }
+  }, [qualityMetrics.qualityReadings, videoMode, cooldownActive]);
 
   // Auto-save session on page unload
   useEffect(() => {
@@ -513,6 +611,160 @@ function VideoSessionContent() {
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
   }, []);
+
+  // Cleanup cooldown and degradation interval on unmount
+  useEffect(() => {
+    return () => {
+      if (cooldownTimeout.current) {
+        clearTimeout(cooldownTimeout.current);
+      }
+      if (degradationCheckInterval.current) {
+        clearInterval(degradationCheckInterval.current);
+      }
+    };
+  }, []);
+
+  // Handle switch to voice-only
+  const switchToVoiceOnly = () => {
+    console.log('Switching to voice-only mode...');
+    
+    // Disable video track
+    if (avatarVideoTrack) {
+      avatarVideoTrack.stop();
+      setAvatarVideoTrack(null);
+    }
+    
+    setVideoMode('voice-only');
+    setShowDegradationAlert(false);
+    
+    // Log user choice
+    setQualityMetrics(prev => {
+      const events = [...prev.degradationEvents];
+      const lastEvent = events[events.length - 1];
+      if (lastEvent && !lastEvent.userChoice) {
+        lastEvent.userChoice = 'voice-only';
+      }
+      return { ...prev, degradationEvents: events };
+    });
+    
+    toast({
+      title: "Voice-Only Mode",
+      description: "Switched to voice-only for better connection. You can retry video anytime."
+    });
+  };
+
+  // Handle keep trying video
+  const keepTryingVideo = () => {
+    console.log('User chose to keep trying video');
+    
+    setShowDegradationAlert(false);
+    setCooldownActive(true);
+    
+    // Log user choice
+    setQualityMetrics(prev => {
+      const events = [...prev.degradationEvents];
+      const lastEvent = events[events.length - 1];
+      if (lastEvent && !lastEvent.userChoice) {
+        lastEvent.userChoice = 'keep-trying';
+      }
+      return { ...prev, degradationEvents: events };
+    });
+    
+    // Set 30-second cooldown
+    cooldownTimeout.current = setTimeout(() => {
+      setCooldownActive(false);
+      // Clear quality readings to force fresh check
+      setQualityMetrics(prev => ({ ...prev, qualityReadings: [] }));
+    }, 30000);
+    
+    toast({
+      description: "Continuing with video. We'll check again in 30 seconds if quality remains poor.",
+      duration: 3000
+    });
+  };
+
+  // Handle retry video
+  const retryVideo = async () => {
+    if (videoRetryCount >= 3) {
+      toast({
+        title: "Retry Limit Reached",
+        description: "You've reached the maximum retry attempts. Please try again later.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    setVideoRetryCount(prev => prev + 1);
+    const currentAttempt = videoRetryCount + 1;
+    
+    toast({
+      title: "Retrying Video",
+      description: `Attempting to re-enable video (${currentAttempt}/3)...`
+    });
+    
+    try {
+      // Re-enable video track
+      const room = roomRef.current;
+      if (!room) throw new Error('Room not connected');
+      
+      // Request video track again by enabling camera
+      await room.localParticipant.setCameraEnabled(true);
+      
+      // Wait for video track to be subscribed
+      await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error('Video timeout')), 5000);
+        
+        const handler = (track: any, publication: any, participant: any) => {
+          if (participant.identity.includes('avatar') && track.kind === Track.Kind.Video) {
+            clearTimeout(timeout);
+            setAvatarVideoTrack(track.mediaStreamTrack);
+            room.off(RoomEvent.TrackSubscribed, handler);
+            resolve();
+          }
+        };
+        
+        room.on(RoomEvent.TrackSubscribed, handler);
+      });
+      
+      // Success!
+      setVideoMode('video');
+      
+      // Reset quality readings
+      setQualityMetrics(prev => ({ ...prev, qualityReadings: [] }));
+      
+      toast({
+        title: "Video Restored",
+        description: "Video has been successfully restored."
+      });
+      
+      // Log retry success
+      setQualityMetrics(prev => ({
+        ...prev,
+        degradationEvents: [
+          ...prev.degradationEvents,
+          { timestamp: new Date(), reason: 'Video retry successful', retryAttempt: currentAttempt }
+        ]
+      }));
+      
+    } catch (error) {
+      console.error('Failed to retry video:', error);
+      
+      toast({
+        title: "Video Retry Failed",
+        description: "Unable to restore video. Staying in voice-only mode.",
+        variant: "destructive"
+      });
+      
+      // Log retry failure
+      setQualityMetrics(prev => ({
+        ...prev,
+        degradationEvents: [
+          ...prev.degradationEvents,
+          { timestamp: new Date(), reason: `Video retry failed (attempt ${currentAttempt})`, retryAttempt: currentAttempt }
+        ]
+      }));
+    }
+  };
 
   // End session handler
   const handleEndSession = async () => {
@@ -622,7 +874,14 @@ function VideoSessionContent() {
       {/* Header */}
       <div className="flex items-center justify-between p-4 bg-gray-900 border-b border-gray-800">
         <div>
-          <h1 className="text-lg font-bold text-white">Video Session: {category}</h1>
+          <h1 className="text-lg font-bold text-white">
+            Video Session: {category}
+            {videoMode === 'voice-only' && (
+              <span className="ml-2 text-sm font-normal text-yellow-400">
+                (Voice-Only Mode)
+              </span>
+            )}
+          </h1>
           <p className="text-xs text-gray-400">Session ID: {sessionId}</p>
         </div>
         <div className="flex items-center gap-4">
@@ -646,7 +905,7 @@ function VideoSessionContent() {
           "flex items-center justify-center bg-gray-900 p-4 transition-all",
           showTranscript ? "w-full md:w-[70%]" : "w-full"
         )}>
-          {avatarVideoTrack ? (
+          {connectionState === 'connected' && videoMode === 'video' && avatarVideoTrack ? (
             <video
               ref={videoRef}
               autoPlay
@@ -654,6 +913,33 @@ function VideoSessionContent() {
               className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
               style={{ aspectRatio: '16/9' }}
             />
+          ) : connectionState === 'connected' && videoMode === 'voice-only' ? (
+            <div className="flex flex-col items-center gap-6">
+              <AudioWaveform className="w-64 h-32" />
+              <div className="text-center">
+                <h2 className="text-xl font-bold text-white mb-2">
+                  Voice-Only Mode
+                </h2>
+                <p className="text-gray-400 mb-4">
+                  Audio connection active. Video disabled due to poor quality.
+                </p>
+                {videoRetryCount < 3 && (
+                  <Button
+                    onClick={retryVideo}
+                    variant="outline"
+                    size="lg"
+                  >
+                    <VideoIcon className="mr-2 h-5 w-5" />
+                    Retry Video (Attempt {videoRetryCount + 1}/3)
+                  </Button>
+                )}
+                {videoRetryCount >= 3 && (
+                  <p className="text-sm text-gray-500">
+                    Maximum retry attempts reached. Refresh the page to try again.
+                  </p>
+                )}
+              </div>
+            </div>
           ) : (
             <div className="flex flex-col items-center gap-4 text-white">
               <Loader2 className="h-16 w-16 animate-spin text-blue-500" />
@@ -772,6 +1058,37 @@ function VideoSessionContent() {
           <p>Press Space to {isMuted ? 'unmute' : 'mute'}. If you're in crisis, call 988 immediately.</p>
         </div>
       </div>
+
+      {/* Degradation Alert Dialog */}
+      <AlertDialog open={showDegradationAlert} onOpenChange={setShowDegradationAlert}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <div className="flex items-center gap-2 text-yellow-600">
+              <AlertTriangle className="h-6 w-6" />
+              <AlertDialogTitle>Poor Video Quality Detected</AlertDialogTitle>
+            </div>
+            <AlertDialogDescription className="space-y-2">
+              <p>
+                Your video connection quality is poor. This may cause freezing, lag, or disconnections.
+              </p>
+              <p className="font-semibold">
+                Reason: {degradationReason}
+              </p>
+              <p>
+                Would you like to switch to voice-only mode for a more stable connection? You can retry video anytime.
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={keepTryingVideo}>
+              Keep Trying Video
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={switchToVoiceOnly}>
+              Switch to Voice-Only
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* End Session Dialog */}
       <AlertDialog open={showEndDialog} onOpenChange={setShowEndDialog}>

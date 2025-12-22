@@ -109,3 +109,41 @@ export async function createVideoRoom(
     })
   });
 }
+
+// Admin Metrics API Types
+export interface CurrentMetrics {
+  active_sessions_count: number;
+  avg_connection_quality: string;
+  error_rate_last_hour: number;
+  api_response_time_p95: number;
+  db_pool_active: number;
+  db_pool_size: number;
+  system_health: string;
+}
+
+export interface SessionMetrics {
+  total_sessions: number;
+  sessions_by_category: Record<string, number>;
+  connection_quality_distribution: Record<string, number>;
+}
+
+export interface ExternalServices {
+  daily_co: string;
+  livekit: string;
+  beyond_presence: string;
+}
+
+export interface AdminMetricsData {
+  current: CurrentMetrics;
+  sessions: SessionMetrics;
+  external: ExternalServices;
+}
+
+export async function fetchAdminMetrics(): Promise<AdminMetricsData> {
+  const [current, sessions, external] = await Promise.all([
+    apiRequest<CurrentMetrics>('/admin/metrics/current'),
+    apiRequest<SessionMetrics>('/admin/metrics/sessions'),
+    apiRequest<ExternalServices>('/admin/metrics/external-services'),
+  ]);
+  return { current, sessions, external };
+}

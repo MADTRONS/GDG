@@ -20,8 +20,8 @@
   # Backend API
   backend:
     build:
-      context: ./packages/backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./packages/backend/Dockerfile
     container_name: counseling-backend
     environment:
       DATABASE_URL: postgresql+psycopg://counseling:devpassword@postgres:5432/counseling_platform
@@ -39,8 +39,8 @@
   # Frontend
   frontend:
     build:
-      context: ./packages/frontend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./packages/frontend/Dockerfile
     container_name: counseling-frontend
     environment:
       NEXT_PUBLIC_API_BASE_URL: http://localhost:8000/api/v1

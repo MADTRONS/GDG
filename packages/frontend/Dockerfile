@@ -6,20 +6,16 @@ WORKDIR /app
 # Install pnpm
 RUN npm install -g pnpm@8.15.0
 
-# Copy workspace configuration
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+# Copy package files
+COPY packages/frontend/package.json ./
 
-# Copy frontend package files
-COPY packages/frontend/package.json ./packages/frontend/
-
-# Install all dependencies
-RUN pnpm install --frozen-lockfile
+# Install dependencies
+RUN pnpm install
 
 # Copy frontend application code
-COPY packages/frontend ./packages/frontend
+COPY packages/frontend ./
 
 # Build the application
-WORKDIR /app/packages/frontend
 RUN pnpm build
 
 # Stage 2: Production
@@ -30,22 +26,16 @@ WORKDIR /app
 # Install pnpm
 RUN npm install -g pnpm@8.15.0
 
-# Copy workspace configuration
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-
-# Copy frontend package.json
-COPY packages/frontend/package.json ./packages/frontend/
+# Copy package.json
+COPY packages/frontend/package.json ./
 
 # Install production dependencies only
-RUN pnpm install --frozen-lockfile --prod
+RUN pnpm install --prod
 
 # Copy built application from builder
-COPY --from=builder /app/packages/frontend/.next ./packages/frontend/.next
-COPY --from=builder /app/packages/frontend/public ./packages/frontend/public
-COPY --from=builder /app/packages/frontend/next.config.mjs ./packages/frontend/
-
-# Set working directory to frontend
-WORKDIR /app/packages/frontend
+COPY --from=builder /app/.next ./.next
+COPY --from=builder /app/public ./public
+COPY --from=builder /app/next.config.mjs ./
 
 # Expose port
 EXPOSE 3000

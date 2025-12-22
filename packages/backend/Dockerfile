@@ -10,7 +10,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements
-COPY requirements.txt ./
+COPY packages/backend/requirements.txt ./
 
 # Install Python dependencies
 RUN pip install --no-cache-dir --user -r requirements.txt
@@ -32,7 +32,7 @@ COPY --from=builder /root/.local /root/.local
 ENV PATH=/root/.local/bin:$PATH
 
 # Copy application code
-COPY app ./app
+COPY packages/backend/app ./app
 
 # Expose port
 EXPOSE 8000

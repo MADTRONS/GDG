@@ -24,8 +24,10 @@ class Settings(BaseSettings):
 
     # External Services (placeholders)
     daily_api_key: str = ''
+    livekit_url: str = ''
     livekit_api_key: str = ''
     livekit_api_secret: str = ''
+    bey_avatar_id: str = ''
     beyond_presence_api_key: str = ''
     deepgram_api_key: str = ''
     cartesia_api_key: str = ''

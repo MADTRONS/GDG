@@ -61,7 +61,8 @@ class AvatarService:
             "ROOM_NAME": room_name,
             "SESSION_ID": session_id,
             "AVATAR_ID": settings.bey_avatar_id,  # Beyond Presence avatar ID
-            "OPENAI_API_KEY": settings.openai_api_key,
+            "BEY_AVATAR_API_KEY": settings.bey_avatar_api_key,  # Beyond Presence API key
+            "GOOGLE_API_KEY": settings.google_api_key,  # For Gemini AI
             "SYSTEM_PROMPT": system_prompt,
             "COUNSELOR_CATEGORY": category.name
         })

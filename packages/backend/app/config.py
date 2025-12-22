@@ -28,10 +28,11 @@ class Settings(BaseSettings):
     livekit_api_key: str = ''
     livekit_api_secret: str = ''
     bey_avatar_id: str = ''
-    beyond_presence_api_key: str = ''
+    bey_avatar_api_key: str = ''  # Beyond Presence API key
     deepgram_api_key: str = ''
     cartesia_api_key: str = ''
     google_api_key: str = ''
+    google_tts_api_key: str = ''  # For Text-to-Speech
     openai_api_key: str = ''
     sentry_dsn: str = ''
 

@@ -108,23 +108,73 @@ export function CounselorCardGrid() {
   };
 
   const handleVideoCall = async (category: CounselorCategory) => {
-    console.log('Video call requested for category:', category.name);
-    console.log('Category ID:', category.id);
-    
-    // Set loading state
+    // Guard: prevent duplicate requests
+    if (loadingVideo === category.id) return;
+
+    // Guard: check authentication
+    if (!user) {
+      toast({
+        title: "Authentication Required",
+        description: "Please log in to start a video session.",
+        variant: "destructive"
+      });
+      router.push('/');
+      return;
+    }
+
     setLoadingVideo(category.id);
-    
-    // Show toast notification
-    toast({
-      title: "Coming Soon",
-      description: "Video calling will be available in the next update. Stay tuned!",
-      duration: 4000,
-    });
-    
-    // Clear loading state after delay
-    setTimeout(() => {
+
+    try {
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1'}/video/create-room`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include',
+          body: JSON.stringify({
+            counselor_category: category.id
+          })
+        }
+      );
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.detail || 'Failed to create video session');
+      }
+
+      const data = await response.json();
+      
+      // Navigate to video session page with room credentials
+      router.push(
+        `/video-session?` +
+        `room_url=${encodeURIComponent(data.room_url)}&` +
+        `access_token=${encodeURIComponent(data.access_token)}&` +
+        `session_id=${encodeURIComponent(data.session_id)}&` +
+        `category=${encodeURIComponent(category.name)}`
+      );
+
+    } catch (error) {
+      console.error('Video call initiation error:', error);
+      
+      toast({
+        title: "Connection Failed",
+        description: error instanceof Error ? error.message : "Unable to start video session. Please try again.",
+        variant: "destructive",
+        action: (
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => handleVideoCall(category)}
+          >
+            Retry
+          </Button>
+        )
+      });
+    } finally {
       setLoadingVideo(null);
-    }, 4000);
+    }
   };
 
   // Loading state

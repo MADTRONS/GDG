@@ -86,3 +86,26 @@ export async function createVoiceRoom(
     })
   });
 }
+
+// Video Session API Types
+export interface CreateVideoRoomRequest {
+  counselor_category: string; // UUID
+}
+
+export interface CreateVideoRoomResponse {
+  room_url: string;
+  access_token: string;
+  room_name: string;
+  session_id: string;
+}
+
+export async function createVideoRoom(
+  categoryId: string
+): Promise<CreateVideoRoomResponse> {
+  return apiRequest<CreateVideoRoomResponse>('/video/create-room', {
+    method: 'POST',
+    body: JSON.stringify({
+      counselor_category: categoryId
+    })
+  });
+}

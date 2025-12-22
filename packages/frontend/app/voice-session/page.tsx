@@ -208,6 +208,11 @@ function VoiceSessionContent() {
       setIsMuted(newMutedState);
     } catch (error) {
       console.error('Failed to toggle mute:', error);
+      toast({
+        title: "Mute Failed",
+        description: "Unable to toggle microphone. Please check your settings.",
+        variant: "destructive"
+      });
     }
   };
 
@@ -222,6 +227,11 @@ function VoiceSessionContent() {
         await (dailyCallRef.current as any).setOutputVolume(newVolume / 100); // Daily expects 0.0-1.0
       } catch (error) {
         console.error('Failed to set volume:', error);
+        toast({
+          title: "Volume Adjustment Failed",
+          description: "Unable to change volume. The setting has been saved for next time.",
+          variant: "destructive"
+        });
       }
     }
   };

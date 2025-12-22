@@ -69,12 +69,12 @@ describe('VoiceSessionPage - Daily.co Connection', () => {
   describe('Parameter Validation', () => {
     it('redirects to dashboard when room_url is missing', async () => {
       mockSearchParams.get.mockImplementation((key: string) => {
-        const params: Record<string, string | null> = {
+        const params: Record<string, string> = {
           user_token: 'token-123',
           session_id: 'session-456',
           category: 'Health Counselor'
         };
-        return params[key] ?? null;
+        return params[key] ?? '';
       });
 
       render(<VoiceSessionPage />);
@@ -91,12 +91,12 @@ describe('VoiceSessionPage - Daily.co Connection', () => {
 
     it('redirects to dashboard when user_token is missing', async () => {
       mockSearchParams.get.mockImplementation((key: string) => {
-        const params: Record<string, string | null> = {
+        const params: Record<string, string> = {
           room_url: 'https://test.daily.co/room',
           session_id: 'session-456',
           category: 'Health Counselor'
         };
-        return params[key] ?? null;
+        return params[key] ?? '';
       });
 
       render(<VoiceSessionPage />);
@@ -108,12 +108,12 @@ describe('VoiceSessionPage - Daily.co Connection', () => {
 
     it('redirects to dashboard when session_id is missing', async () => {
       mockSearchParams.get.mockImplementation((key: string) => {
-        const params: Record<string, string | null> = {
+        const params: Record<string, string> = {
           room_url: 'https://test.daily.co/room',
           user_token: 'token-123',
           category: 'Health Counselor'
         };
-        return params[key] ?? null;
+        return params[key] ?? '';
       });
 
       render(<VoiceSessionPage />);
@@ -607,12 +607,12 @@ describe('VoiceSessionPage - Daily.co Connection', () => {
 
     it('defaults category to "Counselor" when not provided', async () => {
       mockSearchParams.get.mockImplementation((key: string) => {
-        const params: Record<string, string | null> = {
+        const params: Record<string, string> = {
           room_url: 'https://test.daily.co/room',
           user_token: 'token-123',
           session_id: 'session-456'
         };
-        return params[key] ?? null;
+        return params[key] ?? '';
       });
 
       const mockCallObject = {
@@ -629,6 +629,164 @@ describe('VoiceSessionPage - Daily.co Connection', () => {
       await waitFor(() => {
         expect(screen.getAllByText(/voice session: counselor/i)[0]).toBeInTheDocument();
       });
+    });
+  });
+
+  describe('Volume Control', () => {
+    it('adjusts volume and persists to localStorage', async () => {
+      const mockCallObject = {
+        join: vi.fn().mockResolvedValue(undefined),
+        on: vi.fn((event, handler) => {
+          if (event === 'joined-meeting') {
+            setTimeout(() => handler(), 0);
+          }
+        }),
+        leave: vi.fn(),
+        destroy: vi.fn(),
+        setOutputVolume: vi.fn()
+      };
+
+      vi.mocked(DailyIframe.createCallObject).mockReturnValue(mockCallObject as any);
+
+      render(<VoiceSessionPage />);
+
+      await waitFor(() => {
+        expect(screen.getAllByText(/^connected$/i)[0]).toBeInTheDocument();
+      });
+
+      const volumeSlider = screen.getAllByRole('slider', { name: /adjust counselor volume/i })[0];
+      
+      // Simulate volume change to 60%
+      fireEvent.change(volumeSlider, { target: { value: 60 } });
+
+      await waitFor(() => {
+        expect(localStorage.getItem('voice-session-volume')).toBe('60');
+        expect(mockCallObject.setOutputVolume).toHaveBeenCalledWith(0.6);
+      });
+    });
+
+    it('loads saved volume preference on mount', async () => {
+      localStorage.setItem('voice-session-volume', '50');
+
+      const mockCallObject = {
+        join: vi.fn().mockResolvedValue(undefined),
+        on: vi.fn((event, handler) => {
+          if (event === 'joined-meeting') {
+            setTimeout(() => handler(), 0);
+          }
+        }),
+        leave: vi.fn(),
+        destroy: vi.fn(),
+        setOutputVolume: vi.fn()
+      };
+
+      vi.mocked(DailyIframe.createCallObject).mockReturnValue(mockCallObject as any);
+
+      render(<VoiceSessionPage />);
+
+      await waitFor(() => {
+        expect(screen.getAllByText(/50%/)[0]).toBeInTheDocument();
+        // Volume should be applied when connected
+        expect(mockCallObject.setOutputVolume).toHaveBeenCalledWith(0.5);
+      });
+
+      localStorage.removeItem('voice-session-volume');
+    });
+
+    it('disables volume slider when not connected', () => {
+      render(<VoiceSessionPage />);
+
+      const volumeSlider = screen.getAllByRole('slider', { name: /adjust counselor volume/i })[0];
+      expect(volumeSlider).toBeDisabled();
+    });
+  });
+
+  describe('Connection Quality Indicator', () => {
+    it('displays connection quality when network event received', async () => {
+      let networkQualityHandler: any;
+
+      const mockCallObject = {
+        join: vi.fn().mockResolvedValue(undefined),
+        on: vi.fn((event, handler) => {
+          if (event === 'joined-meeting') {
+            setTimeout(() => handler(), 0);
+          } else if (event === 'network-quality-change') {
+            networkQualityHandler = handler;
+          }
+        }),
+        leave: vi.fn(),
+        destroy: vi.fn(),
+        setOutputVolume: vi.fn()
+      };
+
+      vi.mocked(DailyIframe.createCallObject).mockReturnValue(mockCallObject as any);
+
+      render(<VoiceSessionPage />);
+
+      await waitFor(() => {
+        expect(networkQualityHandler).toBeDefined();
+      });
+
+      // Simulate excellent quality
+      networkQualityHandler({ quality: 0.8 });
+
+      await waitFor(() => {
+        expect(screen.getAllByText('Excellent')[0]).toBeInTheDocument();
+      });
+
+      // Simulate fair quality
+      networkQualityHandler({ quality: 0.5 });
+
+      await waitFor(() => {
+        expect(screen.getAllByText('Fair')[0]).toBeInTheDocument();
+      });
+
+      // Simulate poor quality
+      networkQualityHandler({ quality: 0.3 });
+
+      await waitFor(() => {
+        expect(screen.getAllByText('Poor')[0]).toBeInTheDocument();
+      });
+    });
+  });
+
+  describe('Keyboard Accessibility', () => {
+    it('all controls are keyboard accessible', async () => {
+      const mockCallObject = {
+        join: vi.fn().mockResolvedValue(undefined),
+        on: vi.fn((event, handler) => {
+          if (event === 'joined-meeting') {
+            setTimeout(() => handler(), 0);
+          }
+        }),
+        leave: vi.fn(),
+        destroy: vi.fn(),
+        setLocalAudio: vi.fn(),
+        setOutputVolume: vi.fn()
+      };
+
+      vi.mocked(DailyIframe.createCallObject).mockReturnValue(mockCallObject as any);
+
+      render(<VoiceSessionPage />);
+
+      await waitFor(() => {
+        expect(screen.getAllByText(/^connected$/i)[0]).toBeInTheDocument();
+      });
+
+      // Verify mute button is keyboard accessible
+      const muteButton = screen.getAllByRole('button', { name: /mute microphone/i })[0];
+      muteButton.focus();
+      expect(muteButton).toHaveFocus();
+
+      // Verify end session button is keyboard accessible
+      const endButton = screen.getAllByRole('button', { name: /end session/i })[0];
+      endButton.focus();
+      expect(endButton).toHaveFocus();
+
+      // Verify volume slider is keyboard accessible
+      const volumeSlider = screen.getAllByRole('slider', { name: /adjust counselor volume/i })[0];
+      volumeSlider.focus();
+      expect(volumeSlider).toHaveFocus();
     });
   });
 

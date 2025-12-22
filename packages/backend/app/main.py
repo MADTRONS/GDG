@@ -6,6 +6,7 @@ from app.routers import health
 from app.routers.auth import auth_router
 from app.routers import counselors
 from app.routers import voice
+from app.routers import sessions
 
 settings = get_settings()
 
@@ -31,6 +32,7 @@ app.include_router(health.router)
 app.include_router(auth_router)
 app.include_router(counselors.router, prefix='/api/v1')
 app.include_router(voice.router, prefix='/api/v1')
+app.include_router(sessions.router, prefix='/api/v1')
 
 @app.get('/')
 async def root() -> dict[str, str]:

@@ -1,7 +1,7 @@
 ﻿"""Repository for session data access."""
 from uuid import UUID
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,7 +29,7 @@ class SessionRepository:
             session_id: Unique session identifier
             user_id: User ID
             counselor_category: Category name
-            mode: ''voice'' or ''video''
+            mode: 'voice' or 'video'
             room_name: Daily.co room name
             
         Returns:
@@ -72,3 +72,68 @@ class SessionRepository:
             await self.session.commit()
             await self.session.refresh(session_obj)
         return session_obj
+    
+    async def update_session(
+        self,
+        session_id: UUID,
+        ended_at: datetime,
+        duration_seconds: int,
+        transcript: list[dict[str, Any]],
+        crisis_detected: bool
+    ) -> Session:
+        """
+        Update session with end data.
+        
+        Args:
+            session_id: Session UUID
+            ended_at: End timestamp
+            duration_seconds: Duration in seconds
+            transcript: List of transcript messages
+            crisis_detected: Whether crisis was detected
+            
+        Returns:
+            Updated session object
+        """
+        result = await self.session.execute(
+            select(Session).where(Session.id == session_id)
+        )
+        session_obj = result.scalar_one()
+        
+        session_obj.ended_at = ended_at
+        session_obj.duration_seconds = duration_seconds
+        session_obj.transcript = transcript
+        session_obj.crisis_detected = crisis_detected
+        
+        await self.session.commit()
+        await self.session.refresh(session_obj)
+        return session_obj
+    
+    async def get_user_sessions(
+        self,
+        user_id: UUID,
+        mode: Optional[str] = None,
+        limit: int = 50,
+        offset: int = 0
+    ) -> list[Session]:
+        """
+        Get user's sessions with optional filtering.
+        
+        Args:
+            user_id: User UUID
+            mode: Filter by mode ('voice' or 'video')
+            limit: Maximum number of sessions to return
+            offset: Pagination offset
+            
+        Returns:
+            List of session objects
+        """
+        query = select(Session).where(Session.user_id == user_id)
+        
+        if mode:
+            query = query.where(Session.mode == mode)
+        
+        query = query.order_by(Session.started_at.desc()).limit(limit).offset(offset)
+        
+        result = await self.session.execute(query)
+        return list(result.scalars().all())
+

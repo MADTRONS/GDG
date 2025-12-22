@@ -1,10 +1,10 @@
 ﻿"""Session model for tracking counseling sessions."""
 import uuid
 from datetime import UTC, datetime
-from typing import Optional
+from typing import Any, Optional
 
-from sqlalchemy import ForeignKey, Index, String, Text, text
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Boolean, ForeignKey, Index, String, text
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base
@@ -48,8 +48,13 @@ class Session(Base):
     )
     
     # Session data
-    transcript: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    transcript: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
     duration_seconds: Mapped[Optional[int]] = mapped_column(nullable=True)
+    crisis_detected: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        server_default=text("false")
+    )
     
     # Timestamps
     started_at: Mapped[datetime] = mapped_column(

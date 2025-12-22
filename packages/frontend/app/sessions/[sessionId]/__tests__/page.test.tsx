@@ -695,4 +695,342 @@ describe('SessionDetailPage', () => {
       // We verify the button is accessible and can receive focus
     });
   });
+
+  describe('Delete Session', () => {
+    const mockPush = vi.fn();
+
+    beforeEach(() => {
+      vi.mocked(useRouter).mockReturnValue({ push: mockPush } as any);
+      mockPush.mockClear();
+    });
+
+    it('displays delete button on session detail page', async () => {
+      vi.mocked(useAuth).mockReturnValue({
+        user: { id: 'user-1', username: 'testuser', is_blocked: false },
+        isAuthenticated: true,
+        isLoading: false,
+        login: vi.fn(),
+        logout: vi.fn(),
+      });
+
+      vi.mocked(useParams).mockReturnValue({
+        sessionId: '123e4567-e89b-12d3-a456-426614174000',
+      });
+
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => mockSession,
+      });
+
+      render(<SessionDetailPage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Health')).toBeInTheDocument();
+      });
+
+      const deleteButton = screen.getByLabelText(/delete this session/i);
+      expect(deleteButton).toBeInTheDocument();
+      expect(deleteButton).toHaveTextContent('Delete Session');
+    });
+
+    it('shows confirmation dialog when delete button clicked', async () => {
+      vi.mocked(useAuth).mockReturnValue({
+        user: { id: 'user-1', username: 'testuser', is_blocked: false },
+        isAuthenticated: true,
+        isLoading: false,
+        login: vi.fn(),
+        logout: vi.fn(),
+      });
+
+      vi.mocked(useParams).mockReturnValue({
+        sessionId: '123e4567-e89b-12d3-a456-426614174000',
+      });
+
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => mockSession,
+      });
+
+      render(<SessionDetailPage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Health')).toBeInTheDocument();
+      });
+
+      const deleteButton = screen.getByLabelText(/delete this session/i);
+      fireEvent.click(deleteButton);
+
+      // Check for confirmation dialog
+      await waitFor(() => {
+        expect(screen.getByText('Delete Session?')).toBeInTheDocument();
+        expect(screen.getByText(/are you sure/i)).toBeInTheDocument();
+        expect(screen.getByText(/cannot be undone/i)).toBeInTheDocument();
+      });
+    });
+
+    it('calls delete API and redirects on confirm', async () => {
+      vi.mocked(useAuth).mockReturnValue({
+        user: { id: 'user-1', username: 'testuser', is_blocked: false },
+        isAuthenticated: true,
+        isLoading: false,
+        login: vi.fn(),
+        logout: vi.fn(),
+      });
+
+      vi.mocked(useParams).mockReturnValue({
+        sessionId: '123e4567-e89b-12d3-a456-426614174000',
+      });
+
+      // Mock initial session fetch
+      const fetchMock = vi.fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: async () => mockSession,
+        })
+        // Mock delete request
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 204,
+        });
+      
+      global.fetch = fetchMock;
+
+      render(<SessionDetailPage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Health')).toBeInTheDocument();
+      });
+
+      // Open delete dialog
+      const deleteButton = screen.getByLabelText(/delete this session/i);
+      fireEvent.click(deleteButton);
+
+      await waitFor(() => {
+        expect(screen.getByText('Delete Session?')).toBeInTheDocument();
+      });
+
+      // Confirm deletion
+      const confirmButton = screen.getByRole('button', { name: /delete session/i });
+      fireEvent.click(confirmButton);
+
+      await waitFor(() => {
+        // Verify DELETE API was called
+        expect(fetchMock).toHaveBeenCalledWith(
+          expect.stringContaining('/api/v1/sessions/123e4567-e89b-12d3-a456-426614174000'),
+          expect.objectContaining({
+            method: 'DELETE',
+            credentials: 'include'
+          })
+        );
+        
+        // Verify redirect to sessions list
+        expect(mockPush).toHaveBeenCalledWith('/sessions');
+      });
+    });
+
+    it('closes dialog when cancel button clicked', async () => {
+      vi.mocked(useAuth).mockReturnValue({
+        user: { id: 'user-1', username: 'testuser', is_blocked: false },
+        isAuthenticated: true,
+        isLoading: false,
+        login: vi.fn(),
+        logout: vi.fn(),
+      });
+
+      vi.mocked(useParams).mockReturnValue({
+        sessionId: '123e4567-e89b-12d3-a456-426614174000',
+      });
+
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => mockSession,
+      });
+
+      render(<SessionDetailPage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Health')).toBeInTheDocument();
+      });
+
+      // Open dialog
+      const deleteButton = screen.getByLabelText(/delete this session/i);
+      fireEvent.click(deleteButton);
+
+      await waitFor(() => {
+        expect(screen.getByText('Delete Session?')).toBeInTheDocument();
+      });
+
+      // Click cancel
+      const cancelButton = screen.getByRole('button', { name: /cancel/i });
+      fireEvent.click(cancelButton);
+
+      // Dialog should close (text should disappear)
+      await waitFor(() => {
+        expect(screen.queryByText('Delete Session?')).not.toBeInTheDocument();
+      });
+
+      // Verify no API call was made
+      expect(global.fetch).toHaveBeenCalledTimes(1); // Only initial session fetch
+    });
+
+    it('shows error toast when delete fails', async () => {
+      const mockToast = vi.fn();
+      vi.doMock('@/components/ui/use-toast', () => ({
+        useToast: () => ({ toast: mockToast }),
+      }));
+
+      vi.mocked(useAuth).mockReturnValue({
+        user: { id: 'user-1', username: 'testuser', is_blocked: false },
+        isAuthenticated: true,
+        isLoading: false,
+        login: vi.fn(),
+        logout: vi.fn(),
+      });
+
+      vi.mocked(useParams).mockReturnValue({
+        sessionId: '123e4567-e89b-12d3-a456-426614174000',
+      });
+
+      // Mock initial fetch success, delete failure
+      const fetchMock = vi.fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: async () => mockSession,
+        })
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 500,
+        });
+      
+      global.fetch = fetchMock;
+
+      render(<SessionDetailPage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Health')).toBeInTheDocument();
+      });
+
+      // Open and confirm delete
+      const deleteButton = screen.getByLabelText(/delete this session/i);
+      fireEvent.click(deleteButton);
+
+      await waitFor(() => {
+        expect(screen.getByText('Delete Session?')).toBeInTheDocument();
+      });
+
+      const confirmButton = screen.getByRole('button', { name: /delete session/i });
+      fireEvent.click(confirmButton);
+
+      // Wait for error handling
+      await waitFor(() => {
+        // Should not redirect on error
+        expect(mockPush).not.toHaveBeenCalled();
+      });
+    });
+
+    it('handles 403 authorization error', async () => {
+      vi.mocked(useAuth).mockReturnValue({
+        user: { id: 'user-1', username: 'testuser', is_blocked: false },
+        isAuthenticated: true,
+        isLoading: false,
+        login: vi.fn(),
+        logout: vi.fn(),
+      });
+
+      vi.mocked(useParams).mockReturnValue({
+        sessionId: '123e4567-e89b-12d3-a456-426614174000',
+      });
+
+      // Mock 403 error on delete
+      const fetchMock = vi.fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: async () => mockSession,
+        })
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 403,
+        });
+      
+      global.fetch = fetchMock;
+
+      render(<SessionDetailPage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Health')).toBeInTheDocument();
+      });
+
+      // Open and confirm delete
+      const deleteButton = screen.getByLabelText(/delete this session/i);
+      fireEvent.click(deleteButton);
+
+      await waitFor(() => {
+        expect(screen.getByText('Delete Session?')).toBeInTheDocument();
+      });
+
+      const confirmButton = screen.getByRole('button', { name: /delete session/i });
+      fireEvent.click(confirmButton);
+
+      // Should not redirect
+      await waitFor(() => {
+        expect(mockPush).not.toHaveBeenCalled();
+      });
+    });
+
+    it('shows loading state while deleting', async () => {
+      vi.mocked(useAuth).mockReturnValue({
+        user: { id: 'user-1', username: 'testuser', is_blocked: false },
+        isAuthenticated: true,
+        isLoading: false,
+        login: vi.fn(),
+        logout: vi.fn(),
+      });
+
+      vi.mocked(useParams).mockReturnValue({
+        sessionId: '123e4567-e89b-12d3-a456-426614174000',
+      });
+
+      // Mock slow delete
+      const fetchMock = vi.fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: async () => mockSession,
+        })
+        .mockImplementationOnce(() => new Promise(resolve => {
+          setTimeout(() => resolve({ ok: true, status: 204 }), 100);
+        }));
+      
+      global.fetch = fetchMock;
+
+      render(<SessionDetailPage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Health')).toBeInTheDocument();
+      });
+
+      // Open dialog
+      const deleteButton = screen.getByLabelText(/delete this session/i);
+      fireEvent.click(deleteButton);
+
+      await waitFor(() => {
+        expect(screen.getByText('Delete Session?')).toBeInTheDocument();
+      });
+
+      // Confirm delete
+      const confirmButton = screen.getByRole('button', { name: /delete session/i });
+      fireEvent.click(confirmButton);
+
+      // Should show loading state
+      await waitFor(() => {
+        expect(screen.getByText('Deleting...')).toBeInTheDocument();
+      });
+    });
+  });
 });

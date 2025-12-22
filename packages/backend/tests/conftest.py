@@ -107,3 +107,21 @@ async def authenticated_client(client: AsyncClient, test_user) -> AsyncClient:
     })
     assert response.status_code == 200
     return client
+
+
+@pytest_asyncio.fixture
+async def test_category(db_session: AsyncSession):
+    """Create a test counselor category."""
+    from app.models.counselor_category import CounselorCategory
+    
+    category = CounselorCategory(
+        name='Test Category',
+        description='A test category for counseling',
+        icon_name='test_icon',
+        system_prompt='You are a friendly counselor',
+        enabled=True
+    )
+    db_session.add(category)
+    await db_session.commit()
+    await db_session.refresh(category)
+    return category

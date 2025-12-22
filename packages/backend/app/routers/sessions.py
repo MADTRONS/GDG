@@ -306,3 +306,52 @@ async def get_session_details(
         quality_metrics=quality_metrics,
         crisis_detected=session.crisis_detected
     )
+
+
+@router.delete(
+    "/{session_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete a session",
+    description="Soft-delete a session by setting deleted_at timestamp. Only the session owner can delete their session."
+)
+async def delete_session(
+    session_id: UUID,
+    current_user: dict[str, str] = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+) -> None:
+    """
+    Delete a session (soft delete by setting deleted_at timestamp).
+    
+    Only the session owner can delete their session.
+    """
+    # Query session (excluding already deleted sessions)
+    query = select(Session).where(
+        and_(
+            Session.id == session_id,
+            Session.deleted_at.is_(None)
+        )
+    )
+    
+    result = await db.execute(query)
+    session = result.scalar_one_or_none()
+    
+    # Check if session exists
+    if not session:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Session not found"
+        )
+    
+    # Check authorization - user must own the session
+    if str(session.user_id) != current_user["user_id"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to delete this session"
+        )
+    
+    # Soft delete: set deleted_at timestamp
+    session.deleted_at = datetime.utcnow()
+    
+    await db.commit()
+    
+    return None  # 204 No Content

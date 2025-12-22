@@ -6,7 +6,18 @@ import { useAuth } from '@/components/auth/AuthProvider';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/components/ui/use-toast';
-import { ArrowLeft, Phone, Video, Clock, Calendar, Loader2, Download } from 'lucide-react';
+import { 
+  AlertDialog, 
+  AlertDialogAction, 
+  AlertDialogCancel, 
+  AlertDialogContent, 
+  AlertDialogDescription, 
+  AlertDialogFooter, 
+  AlertDialogHeader, 
+  AlertDialogTitle, 
+  AlertDialogTrigger 
+} from '@/components/ui/alert-dialog';
+import { ArrowLeft, Phone, Video, Clock, Calendar, Loader2, Download, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 
@@ -38,6 +49,8 @@ export default function SessionDetailPage() {
   const [session, setSession] = useState<SessionDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -163,6 +176,61 @@ TRANSCRIPT
       title: 'Transcript Downloaded',
       description: `Saved as ${filename}`
     });
+  };
+
+  // Delete session function
+  const deleteSession = async () => {
+    if (!session) return;
+
+    setDeleting(true);
+
+    try {
+      const response = await fetch(
+        `/api/v1/sessions/${session.session_id}`,
+        {
+          method: 'DELETE',
+          credentials: 'include'
+        }
+      );
+
+      if (response.status === 403) {
+        throw new Error('You do not have permission to delete this session.');
+      }
+
+      if (!response.ok) {
+        throw new Error('Failed to delete session');
+      }
+
+      // Success
+      toast({
+        title: 'Session Deleted',
+        description: 'Your session has been permanently deleted.'
+      });
+
+      // Redirect to session history
+      router.push('/sessions');
+
+    } catch (error) {
+      console.error('Error deleting session:', error);
+      
+      setDeleting(false);
+      setShowDeleteDialog(false);
+
+      toast({
+        title: 'Delete Failed',
+        description: error instanceof Error ? error.message : 'Unable to delete session. Please try again.',
+        variant: 'destructive',
+        action: (
+          <Button 
+            variant='outline' 
+            size='sm' 
+            onClick={() => setShowDeleteDialog(true)}
+          >
+            Retry
+          </Button>
+        )
+      });
+    }
   };
 
   // Loading state
@@ -295,6 +363,39 @@ TRANSCRIPT
           <Download className='mr-2 h-5 w-5' />
           Download Transcript
         </Button>
+
+        {/* Delete Session Button with Confirmation */}
+        <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+          <AlertDialogTrigger asChild>
+            <Button
+              variant='destructive'
+              size='lg'
+              disabled={deleting}
+              aria-label='Delete this session'
+            >
+              <Trash2 className='mr-2 h-5 w-5' />
+              {deleting ? 'Deleting...' : 'Delete Session'}
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Session?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to delete this session? This action cannot be undone, and all conversation data will be permanently removed.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={deleteSession}
+                disabled={deleting}
+                className='bg-red-600 hover:bg-red-700'
+              >
+                {deleting ? 'Deleting...' : 'Delete Session'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </div>
   );

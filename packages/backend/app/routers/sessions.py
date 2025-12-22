@@ -4,9 +4,11 @@ from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.models.session import Session
 from app.repositories.session_repository import SessionRepository
 from app.schemas.session import (
     SaveSessionRequest,
@@ -251,14 +253,31 @@ async def get_session_details(
     Get full session details including transcript.
     Used in Epic 5 Session History page.
     """
-    repo = SessionRepository(db)
-    session = await repo.get_by_id(session_id)
+    from app.models.counselor_category import CounselorCategory
     
-    if not session:
+    # Query session with counselor category join
+    query = (
+        select(Session, CounselorCategory)
+        .join(CounselorCategory, Session.counselor_category == CounselorCategory.name)
+        .where(
+            and_(
+                Session.id == session_id,
+                Session.deleted_at.is_(None)
+            )
+        )
+    )
+    
+    result = await db.execute(query)
+    row = result.first()
+    
+    # Check if session exists
+    if not row:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Session not found"
         )
+    
+    session, category = row
     
     # Verify ownership
     if str(session.user_id) != current_user["user_id"]:
@@ -267,13 +286,23 @@ async def get_session_details(
             detail="You do not have permission to view this session"
         )
     
+    # Format transcript messages
+    transcript_data = session.transcript if isinstance(session.transcript, list) else []
+    
+    # Get quality metrics if available
+    quality_metrics = None
+    if hasattr(session, 'quality_metrics') and session.quality_metrics:
+        quality_metrics = session.quality_metrics
+    
     return SessionDetail(
         session_id=session.id,
-        counselor_category=session.counselor_category,
+        counselor_category=category.name,
+        counselor_icon=category.icon_name,
         mode=session.mode,
         started_at=session.started_at.isoformat(),
         ended_at=session.ended_at.isoformat() if session.ended_at else None,
         duration_seconds=session.duration_seconds,
-        transcript=session.transcript if isinstance(session.transcript, list) else [],
+        transcript=transcript_data,
+        quality_metrics=quality_metrics,
         crisis_detected=session.crisis_detected
     )

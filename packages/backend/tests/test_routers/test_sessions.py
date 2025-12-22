@@ -314,6 +314,17 @@ async def test_get_session_details(
     auth_headers_for_user: dict
 ):
     """Test retrieving detailed session information."""
+    # First create counselor category
+    from app.models.counselor_category import CounselorCategory
+    category = CounselorCategory(
+        name='Health',
+        description='Health counseling',
+        icon_name='heart-pulse',
+        enabled=True
+    )
+    db_session.add(category)
+    await db_session.commit()
+    
     # Create a session with transcript
     session_id = uuid.uuid4()
     test_session = Session(
@@ -343,6 +354,7 @@ async def test_get_session_details(
     data = response.json()
     assert data["session_id"] == str(session_id)
     assert data["counselor_category"] == "Health"
+    assert data["counselor_icon"] == "heart-pulse"
     assert data["transcript"] is not None
     assert len(data["transcript"]) == 2
 
@@ -368,6 +380,17 @@ async def test_get_session_details_not_owner(
     auth_headers_for_user: dict
 ):
     """Test getting details of another user's session."""
+    # Create counselor category
+    from app.models.counselor_category import CounselorCategory
+    category = CounselorCategory(
+        name='Career',
+        description='Career counseling',
+        icon_name='briefcase',
+        enabled=True
+    )
+    db_session.add(category)
+    await db_session.commit()
+    
     # Create another user and their session
     other_user = User(
         id=uuid.uuid4(),

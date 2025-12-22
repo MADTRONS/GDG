@@ -1,6 +1,6 @@
 """Session-related Pydantic schemas."""
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
@@ -53,11 +53,13 @@ class SessionDetail(BaseModel):
     """Detailed session information including transcript."""
     session_id: UUID
     counselor_category: str
+    counselor_icon: str
     mode: str
     started_at: str  # ISO format
     ended_at: Optional[str]  # ISO format
     duration_seconds: Optional[int]
     transcript: Optional[list[dict[str, str]]]
+    quality_metrics: Optional[dict[str, Any]] = None
     crisis_detected: bool
 
 

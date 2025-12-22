@@ -48,7 +48,7 @@ class Session(Base):
     )
     
     # Session data
-    transcript: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
+    transcript: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(JSONB, nullable=True)
     duration_seconds: Mapped[Optional[int]] = mapped_column(nullable=True)
     crisis_detected: Mapped[bool] = mapped_column(
         Boolean,

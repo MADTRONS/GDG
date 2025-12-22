@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '@/components/auth/AuthProvider';
 import SessionDetailPage from '../page';
@@ -366,5 +366,333 @@ describe('SessionDetailPage', () => {
     const durationText = screen.getByText(/Duration:/i).parentElement;
     expect(durationText?.textContent).toContain('61m');
     expect(durationText?.textContent).toContain('5s');
+  });
+
+  describe('Download Transcript', () => {
+    let createObjectURLMock: any;
+    let revokeObjectURLMock: any;
+    let clickMock: any;
+    let mockToast: any;
+
+    beforeEach(() => {
+      // Mock URL.createObjectURL and URL.revokeObjectURL
+      createObjectURLMock = vi.fn(() => 'blob:mock-url');
+      revokeObjectURLMock = vi.fn();
+      global.URL.createObjectURL = createObjectURLMock;
+      global.URL.revokeObjectURL = revokeObjectURLMock;
+
+      // Mock anchor element click
+      clickMock = vi.fn();
+      const originalCreateElement = document.createElement.bind(document);
+      vi.spyOn(document, 'createElement').mockImplementation((tagName: string) => {
+        const element = originalCreateElement(tagName);
+        if (tagName === 'a') {
+          element.click = clickMock;
+        }
+        return element;
+      });
+
+      // Mock toast
+      mockToast = vi.fn();
+      vi.doMock('@/components/ui/use-toast', () => ({
+        useToast: () => ({ toast: mockToast }),
+      }));
+    });
+
+    it('displays download button on session detail page', async () => {
+      vi.mocked(useAuth).mockReturnValue({
+        user: { id: 'user-1', username: 'testuser', is_blocked: false },
+        isAuthenticated: true,
+        isLoading: false,
+        login: vi.fn(),
+        logout: vi.fn(),
+      });
+
+      vi.mocked(useParams).mockReturnValue({
+        sessionId: '123e4567-e89b-12d3-a456-426614174000',
+      });
+
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => mockSession,
+      });
+
+      render(<SessionDetailPage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Health')).toBeInTheDocument();
+      });
+
+      const downloadButton = screen.getByLabelText(/download transcript/i);
+      expect(downloadButton).toBeInTheDocument();
+      expect(downloadButton).toHaveAccessibleName('Download transcript as text file');
+    });
+
+    it('creates blob and triggers download when button clicked', async () => {
+      vi.mocked(useAuth).mockReturnValue({
+        user: { id: 'user-1', username: 'testuser', is_blocked: false },
+        isAuthenticated: true,
+        isLoading: false,
+        login: vi.fn(),
+        logout: vi.fn(),
+      });
+
+      vi.mocked(useParams).mockReturnValue({
+        sessionId: '123e4567-e89b-12d3-a456-426614174000',
+      });
+
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => mockSession,
+      });
+
+      render(<SessionDetailPage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Health')).toBeInTheDocument();
+      });
+
+      const downloadButton = screen.getByLabelText(/download transcript/i);
+      fireEvent.click(downloadButton);
+
+      // Verify blob was created
+      expect(createObjectURLMock).toHaveBeenCalled();
+      const blobArg = createObjectURLMock.mock.calls[0][0];
+      expect(blobArg).toBeInstanceOf(Blob);
+      expect(blobArg.type).toBe('text/plain;charset=utf-8');
+
+      // Verify download was triggered
+      expect(clickMock).toHaveBeenCalled();
+
+      // Verify cleanup
+      expect(revokeObjectURLMock).toHaveBeenCalledWith('blob:mock-url');
+    });
+
+    it('generates correct filename format', async () => {
+      vi.mocked(useAuth).mockReturnValue({
+        user: { id: 'user-1', username: 'testuser', is_blocked: false },
+        isAuthenticated: true,
+        isLoading: false,
+        login: vi.fn(),
+        logout: vi.fn(),
+      });
+
+      vi.mocked(useParams).mockReturnValue({
+        sessionId: '123e4567-e89b-12d3-a456-426614174000',
+      });
+
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => mockSession,
+      });
+
+      render(<SessionDetailPage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Health')).toBeInTheDocument();
+      });
+
+      const downloadButton = screen.getByLabelText(/download transcript/i);
+      fireEvent.click(downloadButton);
+
+      // Get the created anchor element
+      const anchorElements = document.querySelectorAll('a[download]');
+      const downloadAnchor = Array.from(anchorElements).find(
+        (el) => (el as HTMLAnchorElement).download.startsWith('Session_')
+      );
+
+      expect(downloadAnchor).toBeDefined();
+      expect((downloadAnchor as HTMLAnchorElement).download).toBe('Session_Health_2025-12-20.txt');
+    });
+
+    it('formats transcript content correctly', async () => {
+      vi.mocked(useAuth).mockReturnValue({
+        user: { id: 'user-1', username: 'testuser', is_blocked: false },
+        isAuthenticated: true,
+        isLoading: false,
+        login: vi.fn(),
+        logout: vi.fn(),
+      });
+
+      vi.mocked(useParams).mockReturnValue({
+        sessionId: '123e4567-e89b-12d3-a456-426614174000',
+      });
+
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => mockSession,
+      });
+
+      render(<SessionDetailPage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Health')).toBeInTheDocument();
+      });
+
+      const downloadButton = screen.getByLabelText(/download transcript/i);
+      fireEvent.click(downloadButton);
+
+      // Get blob content
+      const blobArg = createObjectURLMock.mock.calls[0][0];
+      const reader = new FileReader();
+      
+      return new Promise<void>((resolve) => {
+        reader.onload = () => {
+          const content = reader.result as string;
+
+          // Verify header contains metadata
+          expect(content).toContain('COUNSELING SESSION TRANSCRIPT');
+          expect(content).toContain('Counselor Category: Health');
+          expect(content).toContain('Session Mode: Voice Call');
+          expect(content).toContain('Duration: 15m 0s');
+          expect(content).toContain('Session ID: 123e4567-e89b-12d3-a456-426614174000');
+
+          // Verify transcript contains messages
+          expect(content).toContain('[10:00:00 AM] YOU:');
+          expect(content).toContain('Hello, I need help with managing stress.');
+          expect(content).toContain('[10:00:15 AM] COUNSELOR:');
+          expect(content).toContain('I understand. Let\'s talk about what\'s been stressing you out.');
+          expect(content).toContain('[10:01:00 AM] YOU:');
+          expect(content).toContain('I have so many deadlines coming up.');
+
+          resolve();
+        };
+        reader.readAsText(blobArg);
+      });
+    });
+
+    it('handles empty transcript gracefully', async () => {
+      vi.mocked(useAuth).mockReturnValue({
+        user: { id: 'user-1', username: 'testuser', is_blocked: false },
+        isAuthenticated: true,
+        isLoading: false,
+        login: vi.fn(),
+        logout: vi.fn(),
+      });
+
+      vi.mocked(useParams).mockReturnValue({
+        sessionId: '123e4567-e89b-12d3-a456-426614174000',
+      });
+
+      const emptySession = { ...mockSession, transcript: [] };
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => emptySession,
+      });
+
+      render(<SessionDetailPage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Health')).toBeInTheDocument();
+      });
+
+      const downloadButton = screen.getByLabelText(/download transcript/i);
+      fireEvent.click(downloadButton);
+
+      // Get blob content
+      const blobArg = createObjectURLMock.mock.calls[0][0];
+      const reader = new FileReader();
+      
+      return new Promise<void>((resolve) => {
+        reader.onload = () => {
+          const content = reader.result as string;
+
+          // Verify header is still present
+          expect(content).toContain('COUNSELING SESSION TRANSCRIPT');
+          expect(content).toContain('Counselor Category: Health');
+
+          // Verify empty transcript message
+          expect(content).toContain('No transcript available for this session.');
+
+          resolve();
+        };
+        reader.readAsText(blobArg);
+      });
+    });
+
+    it('formats filename with spaces replaced by underscores', async () => {
+      vi.mocked(useAuth).mockReturnValue({
+        user: { id: 'user-1', username: 'testuser', is_blocked: false },
+        isAuthenticated: true,
+        isLoading: false,
+        login: vi.fn(),
+        logout: vi.fn(),
+      });
+
+      vi.mocked(useParams).mockReturnValue({
+        sessionId: '123e4567-e89b-12d3-a456-426614174000',
+      });
+
+      const sessionWithSpaces = { 
+        ...mockSession, 
+        counselor_category: 'Health and Wellness Counselor' 
+      };
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => sessionWithSpaces,
+      });
+
+      render(<SessionDetailPage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Health and Wellness Counselor')).toBeInTheDocument();
+      });
+
+      const downloadButton = screen.getByLabelText(/download transcript/i);
+      fireEvent.click(downloadButton);
+
+      const anchorElements = document.querySelectorAll('a[download]');
+      const downloadAnchor = Array.from(anchorElements).find(
+        (el) => (el as HTMLAnchorElement).download.startsWith('Session_')
+      );
+
+      expect((downloadAnchor as HTMLAnchorElement).download).toBe(
+        'Session_Health_and_Wellness_Counselor_2025-12-20.txt'
+      );
+    });
+
+    it('is keyboard accessible', async () => {
+      vi.mocked(useAuth).mockReturnValue({
+        user: { id: 'user-1', username: 'testuser', is_blocked: false },
+        isAuthenticated: true,
+        isLoading: false,
+        login: vi.fn(),
+        logout: vi.fn(),
+      });
+
+      vi.mocked(useParams).mockReturnValue({
+        sessionId: '123e4567-e89b-12d3-a456-426614174000',
+      });
+
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => mockSession,
+      });
+
+      render(<SessionDetailPage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Health')).toBeInTheDocument();
+      });
+
+      const downloadButton = screen.getByLabelText(/download transcript/i);
+      
+      // Button should be focusable
+      downloadButton.focus();
+      expect(document.activeElement).toBe(downloadButton);
+
+      // Keyboard trigger (Enter key)
+      fireEvent.keyDown(downloadButton, { key: 'Enter', code: 'Enter' });
+      
+      // Note: The actual click event is handled by the button component
+      // We verify the button is accessible and can receive focus
+    });
   });
 });

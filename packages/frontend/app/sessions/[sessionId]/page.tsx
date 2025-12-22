@@ -6,7 +6,7 @@ import { useAuth } from '@/components/auth/AuthProvider';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/components/ui/use-toast';
-import { ArrowLeft, Phone, Video, Clock, Calendar, Loader2 } from 'lucide-react';
+import { ArrowLeft, Phone, Video, Clock, Calendar, Loader2, Download } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 
@@ -97,6 +97,72 @@ export default function SessionDetailPage() {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins}m ${secs}s`;
+  };
+
+  // Download transcript as text file
+  const downloadTranscript = () => {
+    if (!session) return;
+
+    // Format session metadata header
+    const header = `======================================
+COUNSELING SESSION TRANSCRIPT
+======================================
+
+Counselor Category: ${session.counselor_category}
+Session Mode: ${session.mode === 'video' ? 'Video Call' : 'Voice Call'}
+Date: ${format(new Date(session.started_at), 'PPPP')}
+Time: ${format(new Date(session.started_at), 'p')}
+Duration: ${formatDuration(session.duration_seconds)}
+Session ID: ${session.session_id}
+
+======================================
+TRANSCRIPT
+======================================
+
+`;
+
+    // Format transcript messages
+    const transcript = session.transcript && session.transcript.length > 0
+      ? session.transcript
+          .map(msg => {
+            const timestamp = format(new Date(msg.timestamp), 'h:mm:ss a');
+            const speaker = msg.speaker === 'user' ? 'YOU' : 'COUNSELOR';
+            return `[${timestamp}] ${speaker}:\n${msg.text}\n`;
+          })
+          .join('\n')
+      : 'No transcript available for this session.\n';
+
+    // Combine content
+    const content = header + transcript;
+
+    // Create blob
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+
+    // Generate filename: Session_Category_Date.txt
+    const dateStr = format(new Date(session.started_at), 'yyyy-MM-dd');
+    const categorySlug = session.counselor_category.replace(/\s+/g, '_');
+    const filename = `Session_${categorySlug}_${dateStr}.txt`;
+
+    // Create download link
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.style.display = 'none';
+
+    // Trigger download
+    document.body.appendChild(link);
+    link.click();
+
+    // Cleanup
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    // Show success toast
+    toast({
+      title: 'Transcript Downloaded',
+      description: `Saved as ${filename}`
+    });
   };
 
   // Loading state
@@ -217,6 +283,19 @@ export default function SessionDetailPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Action Buttons */}
+      <div className='mt-6 flex flex-wrap gap-4'>
+        <Button
+          onClick={downloadTranscript}
+          variant='outline'
+          size='lg'
+          aria-label='Download transcript as text file'
+        >
+          <Download className='mr-2 h-5 w-5' />
+          Download Transcript
+        </Button>
+      </div>
     </div>
   );
 }

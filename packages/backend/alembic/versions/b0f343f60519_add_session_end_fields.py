@@ -1,7 +1,7 @@
 """add_session_end_fields
 
 Revision ID: b0f343f60519
-Revises: 5b55184017c9
+Revises: f0a1b2c3d4e5
 Create Date: 2025-12-22 13:46:24.371108
 
 """
@@ -14,7 +14,7 @@ from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision: str = 'b0f343f60519'
-down_revision: Union[str, None] = '5b55184017c9'
+down_revision: Union[str, None] = 'f0a1b2c3d4e5'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

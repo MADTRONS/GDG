@@ -32,6 +32,9 @@ vi.mock('livekit-client', () => {
     connect: vi.fn(),
     on: vi.fn(),
     disconnect: vi.fn(),
+    localParticipant: {
+      audioTracks: new Map(),
+    },
   };
   
   return {
@@ -41,12 +44,18 @@ vi.mock('livekit-client', () => {
       TrackSubscribed: 'trackSubscribed',
       Disconnected: 'disconnected',
       ConnectionQualityChanged: 'connectionQualityChanged',
+      DataReceived: 'dataReceived',
     },
     Track: {
       Kind: {
         Video: 'video',
         Audio: 'audio',
       },
+    },
+    ConnectionQuality: {
+      Excellent: 'excellent',
+      Good: 'good',
+      Poor: 'poor',
     },
   };
 });

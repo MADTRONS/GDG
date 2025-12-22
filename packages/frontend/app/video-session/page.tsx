@@ -2,13 +2,35 @@
 
 import { useEffect, useState, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Room, RoomEvent, Track } from 'livekit-client';
+import { Room, RoomEvent, Track, ConnectionQuality } from 'livekit-client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Slider } from '@/components/ui/slider';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { PhoneOff, Loader2, Video as VideoIcon } from 'lucide-react';
+import { 
+  PhoneOff, 
+  Loader2, 
+  Mic,
+  MicOff,
+  Volume2,
+  VolumeX,
+  Volume1,
+  Wifi,
+  WifiOff,
+  MessageSquare
+} from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
+import { cn } from '@/lib/utils';
 import type { ConnectionState } from '@/types/video';
+
+type ConnectionQualityLevel = 'excellent' | 'good' | 'fair' | 'poor';
+
+interface TranscriptMessage {
+  speaker: 'user' | 'counselor';
+  text: string;
+  timestamp: Date;
+}
 
 function VideoSessionContent() {
   const searchParams = useSearchParams();
@@ -23,15 +45,60 @@ function VideoSessionContent() {
 
   // State
   const [connectionState, setConnectionState] = useState<ConnectionState>('idle');
+  const [connectionQuality, setConnectionQuality] = useState<ConnectionQualityLevel>('good');
   const [showEndDialog, setShowEndDialog] = useState(false);
   const [permissionDenied, setPermissionDenied] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  const [volume, setVolume] = useState<number>(80);
+  const [transcript, setTranscript] = useState<TranscriptMessage[]>([]);
+  const [autoScroll, setAutoScroll] = useState(true);
+  const [showTranscript, setShowTranscript] = useState(true);
   const [avatarVideoTrack, setAvatarVideoTrack] = useState<MediaStreamTrack | null>(null);
+  const [avatarAudioTrack, setAvatarAudioTrack] = useState<any>(null);
 
   // Refs
   const roomRef = useRef<Room | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const transcriptRef = useRef<HTMLDivElement>(null);
   const hasConnected = useRef(false);
   const avatarJoinTimeout = useRef<NodeJS.Timeout | null>(null);
+  const localAudioTrackRef = useRef<any>(null);
+
+  // Load volume from localStorage
+  useEffect(() => {
+    const savedVolume = localStorage.getItem('avatar_volume');
+    if (savedVolume) {
+      setVolume(parseInt(savedVolume));
+    }
+  }, []);
+
+  // Save volume to localStorage
+  useEffect(() => {
+    localStorage.setItem('avatar_volume', volume.toString());
+  }, [volume]);
+
+  // Apply volume to avatar audio track
+  useEffect(() => {
+    if (avatarAudioTrack) {
+      avatarAudioTrack.setVolume(volume / 100);
+    }
+  }, [volume, avatarAudioTrack]);
+
+  // Auto-scroll transcript
+  useEffect(() => {
+    if (autoScroll && transcriptRef.current) {
+      transcriptRef.current.scrollTop = transcriptRef.current.scrollHeight;
+    }
+  }, [transcript, autoScroll]);
+
+  // Handle transcript scroll
+  const handleTranscriptScroll = () => {
+    if (transcriptRef.current) {
+      const { scrollTop, scrollHeight, clientHeight } = transcriptRef.current;
+      const isAtBottom = scrollHeight - scrollTop - clientHeight < 10;
+      setAutoScroll(isAtBottom);
+    }
+  };
 
   // Validate params
   useEffect(() => {
@@ -82,6 +149,11 @@ function VideoSessionContent() {
           console.log('Connected to room');
           setConnectionState('waiting_avatar');
           
+          // Store local audio track for mute/unmute
+          room.localParticipant.audioTracks.forEach(publication => {
+            localAudioTrackRef.current = publication.audioTrack;
+          });
+          
           // Start timeout for avatar joining
           avatarJoinTimeout.current = setTimeout(() => {
             if (connectionState === 'waiting_avatar') {
@@ -93,6 +165,32 @@ function VideoSessionContent() {
               });
             }
           }, 30000); // 30 second timeout
+        });
+
+        // Connection quality change handler
+        room.on(RoomEvent.ConnectionQualityChanged, (quality: ConnectionQuality) => {
+          console.log('Connection quality:', quality);
+          let qualityLevel: ConnectionQualityLevel;
+          switch (quality) {
+            case ConnectionQuality.Excellent:
+              qualityLevel = 'excellent';
+              break;
+            case ConnectionQuality.Good:
+              qualityLevel = 'good';
+              break;
+            case ConnectionQuality.Poor:
+              qualityLevel = 'poor';
+              // Show notification for poor quality
+              toast({
+                title: "Poor Connection Quality",
+                description: "Your connection is unstable. Consider switching to voice-only mode if video continues to lag.",
+                variant: "destructive"
+              });
+              break;
+            default:
+              qualityLevel = 'fair';
+          }
+          setConnectionQuality(qualityLevel);
         });
 
         room.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
@@ -116,9 +214,11 @@ function VideoSessionContent() {
             });
           }
           
-          // Audio tracks play automatically
-          if (track.kind === Track.Kind.Audio) {
-            track.attach();  // Attach to default audio output
+          // Audio tracks - store reference and set volume
+          if (participant.identity.includes('avatar') && track.kind === Track.Kind.Audio) {
+            setAvatarAudioTrack(track);
+            track.setVolume(volume / 100);
+            track.attach(); // Attach to default audio output
           }
         });
 
@@ -130,6 +230,22 @@ function VideoSessionContent() {
         room.on(RoomEvent.ConnectionQualityChanged, (quality, participant) => {
           console.log('Connection quality:', quality, 'for', participant.identity);
           // Could update UI with quality indicator
+        });
+
+        // Data received handler (for transcript)
+        room.on(RoomEvent.DataReceived, (payload: Uint8Array) => {
+          try {
+            const data = JSON.parse(new TextDecoder().decode(payload));
+            if (data.type === 'transcript') {
+              setTranscript(prev => [...prev, {
+                speaker: data.speaker,
+                text: data.text,
+                timestamp: new Date()
+              }]);
+            }
+          } catch (error) {
+            console.error('Failed to parse data:', error);
+          }
         });
 
         // Connect to room
@@ -187,59 +303,64 @@ function VideoSessionContent() {
     router.push('/dashboard');
   };
 
+  // Mute/unmute toggle
+  const toggleMute = () => {
+    if (localAudioTrackRef.current) {
+      if (isMuted) {
+        localAudioTrackRef.current.unmute();
+      } else {
+        localAudioTrackRef.current.mute();
+      }
+      setIsMuted(!isMuted);
+      
+      toast({
+        description: isMuted ? "Microphone unmuted" : "Microphone muted",
+        duration: 2000
+      });
+    }
+  };
+
+  // Keyboard shortcut for mute (Space bar)
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      if (e.code === 'Space' && e.target === document.body) {
+        e.preventDefault();
+        toggleMute();
+      }
+    };
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, [isMuted]);
+
+  // Connection quality icon component
+  const ConnectionQualityIcon = () => {
+    const icons: Record<ConnectionQualityLevel, { Icon: any; color: string; label: string }> = {
+      excellent: { Icon: Wifi, color: 'text-green-600', label: 'Excellent' },
+      good: { Icon: Wifi, color: 'text-green-500', label: 'Good' },
+      fair: { Icon: Wifi, color: 'text-yellow-500', label: 'Fair' },
+      poor: { Icon: WifiOff, color: 'text-red-600', label: 'Poor' },
+    };
+    const { Icon, color, label } = icons[connectionQuality];
+    return (
+      <div className={cn("flex items-center gap-1", color)} title={`Connection: ${label}`}>
+        <Icon className="h-4 w-4" />
+        <span className="text-xs hidden sm:inline">{label}</span>
+      </div>
+    );
+  };
+
+  // Volume icon component
+  const VolumeIcon = () => {
+    if (volume === 0) return <VolumeX className="h-4 w-4" />;
+    if (volume < 33) return <Volume1 className="h-4 w-4" />;
+    return <Volume2 className="h-4 w-4" />;
+  };
+
   // Retry connection
   const retryConnection = () => {
     hasConnected.current = false;
     setConnectionState('idle');
     window.location.reload();
-  };
-
-  // Render connection status
-  const renderConnectionStatus = () => {
-    switch (connectionState) {
-      case 'connecting':
-        return (
-          <div className="flex items-center gap-2 text-blue-600">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            <span>Connecting to room...</span>
-          </div>
-        );
-      case 'waiting_avatar':
-        return (
-          <div className="flex items-center gap-2 text-yellow-600">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            <span>Waiting for {category} avatar to join...</span>
-          </div>
-        );
-      case 'connected':
-        return (
-          <div className="flex items-center gap-2 text-green-600">
-            <div className="h-3 w-3 rounded-full bg-green-600 animate-pulse" />
-            <span>Connected</span>
-          </div>
-        );
-      case 'disconnected':
-        return (
-          <div className="flex items-center gap-2 text-red-600">
-            <div className="h-3 w-3 rounded-full bg-red-600" />
-            <span>Disconnected</span>
-          </div>
-        );
-      case 'error':
-        return (
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center gap-2 text-red-600">
-              <div className="h-3 w-3 rounded-full bg-red-600" />
-              <span>Connection Error</span>
-            </div>
-            <Button onClick={retryConnection} variant="outline" size="sm">
-              Retry Connection
-            </Button>
-          </div>
-        );
-      default:
-        return null;
-    }
   };
 
   // Handle permission denied state
@@ -269,59 +390,162 @@ function VideoSessionContent() {
   }
 
   return (
-    <div className="container mx-auto flex flex-col min-h-screen p-4 bg-black">
+    <div className="flex flex-col h-screen bg-black">
       {/* Header */}
-      <div className="flex items-center justify-between p-4 bg-gray-900 rounded-t-lg">
+      <div className="flex items-center justify-between p-4 bg-gray-900 border-b border-gray-800">
         <div>
-          <h1 className="text-xl font-bold text-white">Video Session: {category}</h1>
-          <p className="text-sm text-gray-400">Session ID: {sessionId}</p>
+          <h1 className="text-lg font-bold text-white">Video Session: {category}</h1>
+          <p className="text-xs text-gray-400">Session ID: {sessionId}</p>
         </div>
-        {renderConnectionStatus()}
+        <div className="flex items-center gap-4">
+          <ConnectionQualityIcon />
+          <div className={cn(
+            "flex items-center gap-1",
+            connectionState === 'connected' ? 'text-green-600' : 'text-yellow-500'
+          )}>
+            <div className="h-2 w-2 rounded-full bg-current animate-pulse" />
+            <span className="text-xs hidden sm:inline">
+              {connectionState === 'connected' ? 'Connected' : 'Connecting...'}
+            </span>
+          </div>
+        </div>
       </div>
 
-      {/* Main video area */}
-      <div className="flex-1 flex items-center justify-center bg-gray-900 p-4">
-        {avatarVideoTrack ? (
-          <video
-            ref={videoRef}
-            autoPlay
-            playsInline
-            className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
-            style={{ aspectRatio: '16/9' }}
-          />
-        ) : (
-          <div className="flex flex-col items-center gap-4 text-white">
-            <Loader2 className="h-16 w-16 animate-spin text-blue-500" />
-            <p className="text-lg">
-              {connectionState === 'connecting' 
-                ? 'Connecting to video session...'
-                : connectionState === 'waiting_avatar'
-                ? 'Waiting for avatar to appear...'
-                : 'Initializing...'}
-            </p>
+      {/* Main Content - Split Layout */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Video Section (70% on desktop) */}
+        <div className={cn(
+          "flex items-center justify-center bg-gray-900 p-4 transition-all",
+          showTranscript ? "w-full md:w-[70%]" : "w-full"
+        )}>
+          {avatarVideoTrack ? (
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
+              style={{ aspectRatio: '16/9' }}
+            />
+          ) : (
+            <div className="flex flex-col items-center gap-4 text-white">
+              <Loader2 className="h-16 w-16 animate-spin text-blue-500" />
+              <p className="text-lg">
+                {connectionState === 'connecting' 
+                  ? 'Connecting to video session...'
+                  : connectionState === 'waiting_avatar'
+                  ? 'Waiting for avatar to appear...'
+                  : 'Initializing...'}
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Transcript Panel (30% on desktop, hidden by default on mobile) */}
+        {showTranscript && (
+          <div className="hidden md:flex md:w-[30%] bg-gray-800 border-l border-gray-700 flex-col">
+            <div className="p-3 border-b border-gray-700">
+              <h2 className="text-sm font-semibold text-white flex items-center gap-2">
+                <MessageSquare className="h-4 w-4" />
+                Live Transcript
+              </h2>
+            </div>
+            <div 
+              ref={transcriptRef}
+              className="flex-1 overflow-y-auto p-4"
+              onScroll={handleTranscriptScroll}
+            >
+              <div className="space-y-3">
+                {transcript.length === 0 ? (
+                  <p className="text-gray-400 text-sm italic">Transcript will appear here as you talk...</p>
+                ) : (
+                  transcript.map((msg, idx) => (
+                    <div key={idx} className="text-sm">
+                      <div className={cn(
+                        "font-semibold mb-1",
+                        msg.speaker === 'user' ? 'text-blue-400' : 'text-green-400'
+                      )}>
+                        {msg.speaker === 'user' ? 'You:' : 'Counselor:'}
+                      </div>
+                      <div className="text-gray-200">{msg.text}</div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+            {!autoScroll && (
+              <div className="p-2 border-t border-gray-700">
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  onClick={() => setAutoScroll(true)}
+                  className="w-full text-xs"
+                >
+                  Scroll to Latest
+                </Button>
+              </div>
+            )}
           </div>
         )}
       </div>
 
-      {/* Controls */}
-      <div className="p-4 bg-gray-900 rounded-b-lg">
-        <div className="flex items-center justify-center gap-4">
+      {/* Control Bar */}
+      <div className="p-4 bg-gray-900 border-t border-gray-800">
+        <div className="flex items-center justify-between max-w-4xl mx-auto gap-2 sm:gap-4">
+          {/* Mute Button */}
+          <Button
+            onClick={toggleMute}
+            variant={isMuted ? "destructive" : "outline"}
+            size="lg"
+            aria-label={isMuted ? "Unmute" : "Mute"}
+            className="shrink-0"
+          >
+            {isMuted ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
+            <span className="ml-2 hidden sm:inline">{isMuted ? "Unmute" : "Mute"}</span>
+          </Button>
+
+          {/* Volume Control */}
+          <div className="hidden sm:flex items-center gap-3 flex-1 max-w-md">
+            <VolumeIcon />
+            <Slider
+              value={[volume]}
+              onValueChange={(values) => setVolume(values[0])}
+              max={100}
+              step={1}
+              className="flex-1"
+              aria-label="Volume"
+            />
+            <span className="text-xs text-gray-400 w-8 text-right">{volume}%</span>
+          </div>
+
+          {/* Mobile Transcript Toggle */}
+          <Button
+            onClick={() => setShowTranscript(!showTranscript)}
+            variant="outline"
+            size="lg"
+            className="md:hidden shrink-0"
+            aria-label="Toggle transcript"
+          >
+            <MessageSquare className="h-5 w-5" />
+          </Button>
+
+          {/* End Session Button */}
           <Button
             onClick={() => setShowEndDialog(true)}
             variant="destructive"
             size="lg"
+            className="shrink-0"
           >
             <PhoneOff className="mr-2 h-5 w-5" />
-            End Session
+            <span className="hidden sm:inline">End Session</span>
           </Button>
         </div>
-        
-        <div className="text-xs text-gray-400 text-center mt-4">
-          <p>If you're in crisis, call 988 (Suicide & Crisis Lifeline) immediately.</p>
+
+        <div className="text-xs text-gray-400 text-center mt-3">
+          <p>Press Space to {isMuted ? 'unmute' : 'mute'}. If you're in crisis, call 988 immediately.</p>
         </div>
       </div>
 
-      {/* End session confirmation dialog */}
+      {/* End Session Dialog */}
       <AlertDialog open={showEndDialog} onOpenChange={setShowEndDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>

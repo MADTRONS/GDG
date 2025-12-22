@@ -63,6 +63,7 @@ class Session(Base):
         index=True
     )
     ended_at: Mapped[Optional[datetime]] = mapped_column(nullable=True)
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(nullable=True)
 
     # Indexes
     __table_args__ = (

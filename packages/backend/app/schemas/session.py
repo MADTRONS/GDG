@@ -59,3 +59,22 @@ class SessionDetail(BaseModel):
     duration_seconds: Optional[int]
     transcript: Optional[list[dict[str, str]]]
     crisis_detected: bool
+
+
+class SessionPreview(BaseModel):
+    """Session preview for list display."""
+    session_id: str
+    counselor_category: str
+    counselor_icon: str
+    mode: str
+    started_at: str  # ISO format
+    duration_seconds: int
+    transcript_preview: str
+
+
+class SessionsListResponse(BaseModel):
+    """Paginated response for session history list."""
+    sessions: list[SessionPreview]
+    total_count: int
+    page: int
+    limit: int

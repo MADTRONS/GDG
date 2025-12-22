@@ -136,4 +136,73 @@ class SessionRepository:
         
         result = await self.session.execute(query)
         return list(result.scalars().all())
+    
+    async def get_user_sessions_with_filters(
+        self,
+        user_id: UUID,
+        category: Optional[str] = None,
+        mode: Optional[str] = None,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
+        page: int = 1,
+        limit: int = 20
+    ) -> tuple[list[tuple[Session, str, str]], int]:
+        """
+        Get user's sessions with enhanced filtering and pagination.
+        Returns sessions with counselor category name and icon.
+        
+        Args:
+            user_id: User UUID
+            category: Filter by counselor category name
+            mode: Filter by mode ('voice' or 'video')
+            start_date: Filter sessions after this date
+            end_date: Filter sessions before this date
+            page: Page number (1-indexed)
+            limit: Results per page
+            
+        Returns:
+            Tuple of (list of (Session, category_name, category_icon), total_count)
+        """
+        from app.models.counselor_category import CounselorCategory
+        from sqlalchemy import and_, func
+        
+        # Build base query with join
+        query = (
+            select(Session, CounselorCategory.name, CounselorCategory.icon_name)
+            .join(CounselorCategory, Session.counselor_category == CounselorCategory.name)
+            .where(
+                and_(
+                    Session.user_id == user_id,
+                    Session.deleted_at.is_(None)
+                )
+            )
+        )
+        
+        # Apply filters
+        if category:
+            query = query.where(CounselorCategory.name == category)
+        
+        if mode:
+            query = query.where(Session.mode == mode)
+        
+        if start_date:
+            query = query.where(Session.started_at >= start_date)
+        
+        if end_date:
+            query = query.where(Session.started_at <= end_date)
+        
+        # Get total count (before pagination)
+        count_query = select(func.count()).select_from(query.subquery())
+        total_result = await self.session.execute(count_query)
+        total_count = total_result.scalar() or 0
+        
+        # Apply sorting and pagination
+        offset = (page - 1) * limit
+        query = query.order_by(Session.started_at.desc()).offset(offset).limit(limit)
+        
+        # Execute query
+        result = await self.session.execute(query)
+        rows = result.all()
+        
+        return rows, total_count
 

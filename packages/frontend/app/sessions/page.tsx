@@ -1,14 +1,18 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Calendar as CalendarComponent } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useToast } from '@/components/ui/use-toast';
-import { Phone, Video, Clock, ChevronRight, Calendar, Filter, Loader2 } from 'lucide-react';
+import { Phone, Video, Clock, ChevronRight, Calendar, Filter, Loader2, Calendar as CalendarIcon } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
+import type { DateRange } from 'react-day-picker';
 import type { Session, SessionsResponse } from '@/types/session';
 
 export default function SessionHistoryPage() {
@@ -21,15 +25,35 @@ export default function SessionHistoryPage() {
 
 function SessionHistoryContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { toast } = useToast();
+
+  // Initialize filters from URL
+  const [categoryFilter, setCategoryFilter] = useState<string>(
+    searchParams.get('category') || 'all'
+  );
+  const [modeFilter, setModeFilter] = useState<string>(
+    searchParams.get('mode') || 'all'
+  );
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(() => {
+    const startDate = searchParams.get('start_date');
+    const endDate = searchParams.get('end_date');
+    if (startDate && endDate) {
+      return {
+        from: new Date(startDate),
+        to: new Date(endDate)
+      };
+    }
+    return undefined;
+  });
 
   // State
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
   const [totalCount, setTotalCount] = useState(0);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [categoryFilter, setCategoryFilter] = useState<string>('all');
-  const [modeFilter, setModeFilter] = useState<string>('all');
+  const [currentPage, setCurrentPage] = useState(
+    parseInt(searchParams.get('page') || '1', 10)
+  );
   const limit = 20;
 
   const categories = [
@@ -48,6 +72,32 @@ function SessionHistoryContent() {
     { value: 'video', label: 'Video Call' },
   ];
 
+  // Update URL when filters change
+  useEffect(() => {
+    const params = new URLSearchParams();
+    
+    if (categoryFilter !== 'all') {
+      params.set('category', categoryFilter);
+    }
+    if (modeFilter !== 'all') {
+      params.set('mode', modeFilter);
+    }
+    if (dateRange?.from) {
+      params.set('start_date', dateRange.from.toISOString());
+    }
+    if (dateRange?.to) {
+      params.set('end_date', dateRange.to.toISOString());
+    }
+    if (currentPage > 1) {
+      params.set('page', currentPage.toString());
+    }
+
+    const paramsString = params.toString();
+    const newUrl = paramsString ? `/sessions?${paramsString}` : '/sessions';
+    
+    router.replace(newUrl, { scroll: false });
+  }, [categoryFilter, modeFilter, dateRange, currentPage, router]);
+
   // Fetch sessions
   const fetchSessions = async () => {
     setLoading(true);
@@ -62,6 +112,12 @@ function SessionHistoryContent() {
       }
       if (modeFilter !== 'all') {
         params.append('mode', modeFilter);
+      }
+      if (dateRange?.from) {
+        params.append('start_date', dateRange.from.toISOString());
+      }
+      if (dateRange?.to) {
+        params.append('end_date', dateRange.to.toISOString());
       }
 
       const response = await fetch(`/api/v1/sessions?${params.toString()}`, {
@@ -89,13 +145,26 @@ function SessionHistoryContent() {
 
   useEffect(() => {
     fetchSessions();
-  }, [currentPage, categoryFilter, modeFilter]);
+  }, [currentPage, categoryFilter, modeFilter, dateRange]);
 
   // Clear filters
   const clearFilters = () => {
     setCategoryFilter('all');
     setModeFilter('all');
+    setDateRange(undefined);
     setCurrentPage(1);
+    
+    toast({
+      title: "Filters Cleared",
+      description: "Showing all sessions"
+    });
+  };
+
+  // Check if any filters are active
+  const hasActiveFilters = () => {
+    return categoryFilter !== 'all' || 
+           modeFilter !== 'all' || 
+           dateRange !== undefined;
   };
 
   // Format duration
@@ -109,15 +178,18 @@ function SessionHistoryContent() {
   if (loading && sessions.length === 0) {
     return (
       <div className="container mx-auto p-6">
-        <div className="flex items-center justify-center min-h-[400px]">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-600" role="status" />
+        <div className="flex flex-col items-center justify-center min-h-[400px]">
+          <Loader2 className="h-8 w-8 animate-spin text-blue-600 mb-2" role="status" />
+          <p className="text-gray-600">
+            {hasActiveFilters() ? 'Filtering sessions...' : 'Loading sessions...'}
+          </p>
         </div>
       </div>
     );
   }
 
   // Empty state (no sessions at all)
-  if (!loading && sessions.length === 0 && categoryFilter === 'all' && modeFilter === 'all') {
+  if (!loading && sessions.length === 0 && !hasActiveFilters()) {
     return (
       <div className="container mx-auto p-6">
         <h1 className="text-3xl font-bold mb-6">My Counseling Sessions</h1>
@@ -157,81 +229,148 @@ function SessionHistoryContent() {
           <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
             <Filter className="h-5 w-5" />
             Filters
+            {hasActiveFilters() && (
+              <span className="text-sm font-normal text-blue-600">
+                ({totalCount} result{totalCount !== 1 ? 's' : ''})
+              </span>
+            )}
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
+          <div className="flex flex-wrap gap-4">
             {/* Category Filter */}
-            <div>
-              <label className="text-sm font-medium mb-2 block">Category</label>
-              <div className="flex flex-wrap gap-2">
-                {categories.map((cat) => (
-                  <Button
-                    key={cat.value}
-                    variant={categoryFilter === cat.value ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => {
-                      setCategoryFilter(cat.value);
-                      setCurrentPage(1);
-                    }}
-                    className="text-xs sm:text-sm"
-                  >
-                    {cat.icon && <span className="mr-1">{cat.icon}</span>}
-                    {cat.label}
-                  </Button>
-                ))}
-              </div>
+            <div className="flex-1 min-w-[200px]">
+              <label className="text-sm font-medium mb-2 block" htmlFor="category-filter">
+                Category
+              </label>
+              <Select 
+                value={categoryFilter} 
+                onValueChange={(value) => {
+                  setCategoryFilter(value);
+                  setCurrentPage(1);
+                }}
+              >
+                <SelectTrigger id="category-filter" aria-label="Filter by counselor category">
+                  <SelectValue placeholder="All Categories" />
+                </SelectTrigger>
+                <SelectContent>
+                  {categories.map((cat) => (
+                    <SelectItem key={cat.value} value={cat.value}>
+                      {cat.icon && <span className="mr-1">{cat.icon}</span>}
+                      {cat.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             {/* Mode Filter */}
-            <div>
-              <label className="text-sm font-medium mb-2 block">Mode</label>
-              <div className="flex flex-wrap gap-2">
-                {modes.map((mode) => (
+            <div className="flex-1 min-w-[200px]">
+              <label className="text-sm font-medium mb-2 block" htmlFor="mode-filter">
+                Mode
+              </label>
+              <Select 
+                value={modeFilter} 
+                onValueChange={(value) => {
+                  setModeFilter(value);
+                  setCurrentPage(1);
+                }}
+              >
+                <SelectTrigger id="mode-filter" aria-label="Filter by session mode">
+                  <SelectValue placeholder="All Modes" />
+                </SelectTrigger>
+                <SelectContent>
+                  {modes.map((mode) => (
+                    <SelectItem key={mode.value} value={mode.value}>
+                      {mode.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Date Range Picker */}
+            <div className="flex-1 min-w-[240px]">
+              <label className="text-sm font-medium mb-2 block">
+                Date Range
+              </label>
+              <Popover>
+                <PopoverTrigger asChild>
                   <Button
-                    key={mode.value}
-                    variant={modeFilter === mode.value ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => {
-                      setModeFilter(mode.value);
+                    variant="outline"
+                    className={cn(
+                      "w-full justify-start text-left font-normal",
+                      !dateRange && "text-gray-500"
+                    )}
+                    aria-label="Select date range"
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {dateRange?.from ? (
+                      dateRange.to ? (
+                        <>
+                          {format(dateRange.from, "MMM dd, yyyy")} -{" "}
+                          {format(dateRange.to, "MMM dd, yyyy")}
+                        </>
+                      ) : (
+                        format(dateRange.from, "MMM dd, yyyy")
+                      )
+                    ) : (
+                      <span>Pick a date range</span>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <CalendarComponent
+                    initialFocus
+                    mode="range"
+                    defaultMonth={dateRange?.from}
+                    selected={dateRange}
+                    onSelect={(range) => {
+                      setDateRange(range);
                       setCurrentPage(1);
                     }}
-                    className="text-xs sm:text-sm"
-                  >
-                    {mode.label}
-                  </Button>
-                ))}
-              </div>
+                    numberOfMonths={2}
+                  />
+                </PopoverContent>
+              </Popover>
             </div>
 
             {/* Clear Filters */}
-            {(categoryFilter !== 'all' || modeFilter !== 'all') && (
-              <div>
-                <Button
-                  variant="ghost"
-                  onClick={clearFilters}
-                  className="w-full sm:w-auto"
-                >
-                  Clear Filters
-                </Button>
-              </div>
-            )}
+            <div className="flex items-end">
+              <Button
+                variant="outline"
+                onClick={clearFilters}
+                disabled={!hasActiveFilters() || loading}
+                aria-label="Clear all filters"
+              >
+                Clear Filters
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
 
       {/* Session List */}
       {sessions.length === 0 ? (
-        <Card className="text-center py-8">
-          <CardContent className="pt-6">
-            <p className="text-gray-600">No sessions found matching your filters.</p>
-            <Button variant="link" onClick={clearFilters} className="mt-2">
-              Clear filters to see all sessions
-            </Button>
-          </CardContent>
-        </Card>
+        hasActiveFilters() ? (
+          <Card className="text-center py-8">
+            <CardContent className="pt-6">
+              <p className="text-gray-600 mb-4">No sessions found matching your filters.</p>
+              <Button variant="link" onClick={clearFilters}>
+                Clear filters to see all sessions
+              </Button>
+            </CardContent>
+          </Card>
+        ) : null
       ) : (
         <div className="space-y-4">
+          {/* Active Filters Badge */}
+          {hasActiveFilters() && (
+            <div className="flex items-center gap-2 text-sm text-gray-600">
+              <span>Showing {totalCount} filtered result{totalCount !== 1 ? 's' : ''}</span>
+            </div>
+          )}
+          
           {sessions.map((session) => (
             <Card
               key={session.session_id}

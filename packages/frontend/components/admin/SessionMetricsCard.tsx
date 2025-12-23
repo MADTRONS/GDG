@@ -24,7 +24,7 @@ export function SessionMetricsCard({ metrics }) {
             <PieChart>
               <Pie data={categoryData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={60} fill="#8884d8" label>
                 {categoryData.map((entry, index) => (
-                  <Cell key={cell-} fill={COLORS[index % COLORS.length]} />
+                  <Cell key={`cell-category-${index}`} fill={COLORS[index % COLORS.length]} />
                 ))}
               </Pie>
               <Tooltip />
@@ -38,7 +38,7 @@ export function SessionMetricsCard({ metrics }) {
             <PieChart>
               <Pie data={qualityData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={60} fill="#82ca9d" label>
                  {qualityData.map((entry, index) => (
-                  <Cell key={cell-} fill={COLORS[index % COLORS.length]} />
+                  <Cell key={`cell-quality-${index}`} fill={COLORS[index % COLORS.length]} />
                 ))}
               </Pie>
               <Tooltip />

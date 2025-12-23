@@ -28,7 +28,8 @@ class Settings(BaseSettings):
     livekit_url: str = ''
     livekit_api_key: str = ''
     livekit_api_secret: str = ''
-    bey_avatar_id: str = ''
+    avatar_id: str = ''  # Beyond Presence Avatar ID
+    bey_avatar_id: str = ''  # Alternative field name
     bey_avatar_api_key: str = ''  # Beyond Presence API key
     beyond_presence_api_key: str = ''  # Alternative field name
     deepgram_api_key: str = ''

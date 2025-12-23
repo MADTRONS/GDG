@@ -28,6 +28,7 @@ class CreateRoomResponse(BaseModel):
     access_token: str
     room_name: str
     session_id: UUID4
+    avatar_id: str
 
 
 @router.post(
@@ -112,11 +113,15 @@ async def create_room(
         # Construct room URL
         room_url = settings.livekit_url.replace("wss://", "https://").replace("ws://", "http://")
         
+        # Get avatar_id from settings or use default
+        avatar_id = settings.avatar_id or settings.bey_avatar_id or '55590705-9528-4022-9550-70b724c962d8'
+        
         return CreateRoomResponse(
             room_url=room_url,
             access_token=access_token,
             room_name=room_name,
-            session_id=session_id
+            session_id=session_id,
+            avatar_id=avatar_id
         )
         
     except HTTPException:

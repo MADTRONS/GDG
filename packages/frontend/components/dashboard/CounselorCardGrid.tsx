@@ -152,7 +152,8 @@ export function CounselorCardGrid() {
         `room_url=${encodeURIComponent(data.room_url)}&` +
         `access_token=${encodeURIComponent(data.access_token)}&` +
         `session_id=${encodeURIComponent(data.session_id)}&` +
-        `category=${encodeURIComponent(category.name)}`
+        `category=${encodeURIComponent(category.name)}&` +
+        `avatar_id=${encodeURIComponent(data.avatar_id || '55590705-9528-4022-9550-70b724c962d8')}`
       );
 
     } catch (error) {

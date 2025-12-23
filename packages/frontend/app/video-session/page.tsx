@@ -70,6 +70,7 @@ function VideoSessionContent() {
   const accessToken = searchParams.get('access_token');
   const sessionId = searchParams.get('session_id');
   const category = searchParams.get('category') || 'Counselor';
+  const avatarId = searchParams.get('avatar_id') || '55590705-9528-4022-9550-70b724c962d8';
 
   // State
   const [connectionState, setConnectionState] = useState<ConnectionState>('idle');
@@ -198,35 +199,18 @@ function VideoSessionContent() {
     // Construct session payload
     const sessionPayload = {
       session_id: sessionId,
-      counselor_category: category,
-      mode: videoMode === 'voice-only' ? 'voice' : 'video',
-      start_time: sessionStartTime.toISOString(),
-      end_time: sessionEndTime.toISOString(),
-      duration_seconds: durationSeconds,
+      duration: durationSeconds,
       transcript: transcript.map(msg => ({
         speaker: msg.speaker,
         text: msg.text,
         timestamp: msg.timestamp.toISOString()
       })),
-      quality_metrics: {
-        average_bitrate: parseFloat(avgBitrate.toFixed(2)),
-        average_fps: parseFloat(avgFps.toFixed(2)),
-        packet_loss_percentage: parseFloat(packetLossPercentage.toFixed(2)),
-        connection_quality_average: calculateConnectionQualityAverage(qualityMetrics.connectionQualityReadings),
-        total_readings: totalReadings,
-        degradation_events: qualityMetrics.degradationEvents.map(event => ({
-          timestamp: event.timestamp.toISOString(),
-          reason: event.reason,
-          user_choice: event.userChoice,
-          retry_attempt: event.retryAttempt
-        })),
-        video_mode: videoMode,
-        video_retry_count: videoRetryCount
-      }
+      crisis_detected: false
     };
 
     try {
-      const response = await fetch('/api/v1/sessions/save', {
+      const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api';
+      const response = await fetch(`${API_BASE_URL}/v1/sessions/save`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -323,24 +307,20 @@ function VideoSessionContent() {
         // Set up event listeners
         room.on(RoomEvent.Connected, () => {
           console.log('Connected to room');
-          setConnectionState('waiting_avatar');
+          // Immediately set to connected since iframe handles avatar
+          setConnectionState('connected');
           
           // Store local audio track for mute/unmute
-          room.localParticipant.audioTracks.forEach(publication => {
-            localAudioTrackRef.current = publication.audioTrack;
-          });
+          if (room.localParticipant.audioTracks) {
+            room.localParticipant.audioTracks.forEach((publication) => {
+              localAudioTrackRef.current = publication.audioTrack;
+            });
+          }
           
-          // Start timeout for avatar joining
-          avatarJoinTimeout.current = setTimeout(() => {
-            if (connectionState === 'waiting_avatar') {
-              setConnectionState('error');
-              toast({
-                title: "Avatar Connection Timeout",
-                description: "The counselor avatar didn't join. Please try again.",
-                variant: "destructive"
-              });
-            }
-          }, 30000); // 30 second timeout
+          toast({
+            title: "Connected",
+            description: `You're now connected to ${category}.`,
+          });
         });
 
         // Connection quality change handler
@@ -905,13 +885,13 @@ function VideoSessionContent() {
           "flex items-center justify-center bg-gray-900 p-4 transition-all",
           showTranscript ? "w-full md:w-[70%]" : "w-full"
         )}>
-          {connectionState === 'connected' && videoMode === 'video' && avatarVideoTrack ? (
-            <video
-              ref={videoRef}
-              autoPlay
-              playsInline
-              className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
-              style={{ aspectRatio: '16/9' }}
+          {connectionState === 'connected' && videoMode === 'video' ? (
+            <iframe
+              src={`https://bey.chat/${avatarId}`}
+              className="w-full h-full rounded-lg shadow-2xl"
+              style={{ minHeight: '600px', border: 'none' }}
+              allow="camera; microphone; fullscreen"
+              allowFullScreen
             />
           ) : connectionState === 'connected' && videoMode === 'voice-only' ? (
             <div className="flex flex-col items-center gap-6">

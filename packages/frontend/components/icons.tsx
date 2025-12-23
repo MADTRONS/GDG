@@ -14,6 +14,7 @@ import {
   AlertTriangle,
   XCircle,
   HelpCircle,
+  Download,
 } from 'lucide-react';
 
 export type Icon = LucideIcon;
@@ -32,4 +33,5 @@ export const Icons = {
   alertTriangle: (props: LucideProps) => <AlertTriangle {...props} />,
   xCircle: (props: LucideProps) => <XCircle {...props} />,
   helpCircle: (props: LucideProps) => <HelpCircle {...props} />,
+  download: (props: LucideProps) => <Download {...props} />,
 };

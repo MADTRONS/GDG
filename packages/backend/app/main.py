@@ -7,6 +7,7 @@ from app.routers.auth import auth_router
 from app.routers.admin_auth import admin_auth_router
 from app.routers.admin_counselors import admin_counselors_router
 from app.routers.admin_metrics import admin_metrics_router
+from app.routers.admin_analytics import admin_analytics_router
 from app.routers import counselors
 from app.routers import voice
 from app.routers import sessions
@@ -37,6 +38,7 @@ app.include_router(auth_router)
 app.include_router(admin_auth_router)
 app.include_router(admin_counselors_router)
 app.include_router(admin_metrics_router)
+app.include_router(admin_analytics_router)
 app.include_router(counselors.router, prefix='/api/v1')
 app.include_router(voice.router, prefix='/api/v1')
 app.include_router(sessions.router, prefix='/api/v1')

@@ -139,6 +139,16 @@ export interface AdminMetricsData {
   external: ExternalServices;
 }
 
+export interface SessionAnalytics {
+  total_sessions: number;
+  avg_duration: number;
+  sessions_by_category: Record<string, number>;
+  sessions_by_mode: Record<string, number>;
+  peak_usage_hours: Record<number, number>;
+  daily_trend: Record<string, number>;
+  avg_duration_by_category: Record<string, number>;
+}
+
 export async function fetchAdminMetrics(): Promise<AdminMetricsData> {
   const [current, sessions, external] = await Promise.all([
     apiRequest<CurrentMetrics>('/admin/metrics/current'),
@@ -146,4 +156,13 @@ export async function fetchAdminMetrics(): Promise<AdminMetricsData> {
     apiRequest<ExternalServices>('/admin/metrics/external-services'),
   ]);
   return { current, sessions, external };
+}
+
+export async function fetchSessionAnalytics(
+  startDate: string,
+  endDate: string
+): Promise<SessionAnalytics> {
+  return apiRequest<SessionAnalytics>(
+    `/admin/analytics/sessions?start_date=${startDate}&end_date=${endDate}`
+  );
 }

@@ -6,6 +6,7 @@ import { AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { CounselorCard } from './CounselorCard';
 import { CounselorCardSkeleton } from './CounselorCardSkeleton';
+import { PhoneNumberDialog } from './PhoneNumberDialog';
 import { getCategories, type CounselorCategory } from '@/lib/api';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/components/auth/AuthProvider';
@@ -16,6 +17,8 @@ export function CounselorCardGrid() {
   const [error, setError] = useState<string | null>(null);
   const [loadingVoice, setLoadingVoice] = useState<string | null>(null);
   const [loadingVideo, setLoadingVideo] = useState<string | null>(null);
+  const [phoneDialogOpen, setPhoneDialogOpen] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<CounselorCategory | null>(null);
   const { toast } = useToast();
   const { user } = useAuth();
   const router = useRouter();
@@ -38,10 +41,7 @@ export function CounselorCardGrid() {
   }, []);
 
   const handleVoiceCall = async (category: CounselorCategory) => {
-    // Guard: prevent duplicate requests
-    if (loadingVoice === category.id) return;
-
-    // Guard: check authentication
+    // Guard: check authentication first
     if (!user) {
       toast({
         title: "Authentication Required",
@@ -52,11 +52,22 @@ export function CounselorCardGrid() {
       return;
     }
 
-    setLoadingVoice(category.id);
+    // Open phone number dialog
+    setSelectedCategory(category);
+    setPhoneDialogOpen(true);
+  };
+
+  const handlePhoneSubmit = async (phoneNumber: string) => {
+    if (!selectedCategory) return;
+
+    // Guard: prevent duplicate requests
+    if (loadingVoice === selectedCategory.id) return;
+
+    setLoadingVoice(selectedCategory.id);
 
     try {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1'}/voice/create-room`,
+        `${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api'}/v1/voice/create-room`,
         {
           method: 'POST',
           headers: {
@@ -64,7 +75,8 @@ export function CounselorCardGrid() {
           },
           credentials: 'include',
           body: JSON.stringify({
-            counselor_category: category.id
+            counselor_category: selectedCategory.id,
+            phone_number: phoneNumber
           })
         }
       );
@@ -82,7 +94,7 @@ export function CounselorCardGrid() {
         `room_url=${encodeURIComponent(data.room_url)}&` +
         `user_token=${encodeURIComponent(data.user_token)}&` +
         `session_id=${encodeURIComponent(data.session_id)}&` +
-        `category=${encodeURIComponent(category.name)}`
+        `category=${encodeURIComponent(selectedCategory.name)}`
       );
 
     } catch (error) {
@@ -96,7 +108,7 @@ export function CounselorCardGrid() {
           <Button 
             variant="outline" 
             size="sm" 
-            onClick={() => handleVoiceCall(category)}
+            onClick={() => handleVoiceCall(selectedCategory)}
           >
             Retry
           </Button>
@@ -209,17 +221,26 @@ export function CounselorCardGrid() {
 
   // Success state
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-      {categories.map((category) => (
-        <CounselorCard
-          key={category.id}
-          category={category}
-          onVoiceCall={handleVoiceCall}
-          onVideoCall={handleVideoCall}
-          isVoiceLoading={loadingVoice === category.id}
-          isVideoLoading={loadingVideo === category.id}
-        />
-      ))}
-    </div>
+    <>
+      <PhoneNumberDialog
+        open={phoneDialogOpen}
+        onOpenChange={setPhoneDialogOpen}
+        counselorName={selectedCategory?.name || ''}
+        onSubmit={handlePhoneSubmit}
+      />
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        {categories.map((category) => (
+          <CounselorCard
+            key={category.id}
+            category={category}
+            onVoiceCall={handleVoiceCall}
+            onVideoCall={handleVideoCall}
+            isVoiceLoading={loadingVoice === category.id}
+            isVideoLoading={loadingVideo === category.id}
+          />
+        ))}
+      </div>
+    </>
   );
 }

@@ -1,15 +1,25 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "../../ui/card";
 import { MetricCard } from "./MetricCard";
-import { Icons } from "@/components/icons";
-import { cn } from "@/lib/utils";
+import { Icons } from "../../icons";
+import { cn } from "../../../lib/utils";
 
-const healthColorMap = {
+const healthColorMap: Record<string, string> = {
   healthy: "text-green-500",
   degraded: "text-yellow-500",
   critical: "text-red-500",
 };
 
-export function SystemHealthCard({ metrics }) {
+interface SystemMetrics {
+  system_health: string;
+  active_sessions_count: number;
+  avg_connection_quality: number;
+  error_rate_last_hour: number;
+  api_response_time_p95: number;
+  db_pool_active: number;
+  db_pool_size: number;
+}
+
+export function SystemHealthCard({ metrics }: { metrics: SystemMetrics | null }) {
   if (!metrics) return null;
 
   const healthClassName = healthColorMap[metrics.system_health] || "text-gray-500";

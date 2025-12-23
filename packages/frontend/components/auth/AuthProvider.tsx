@@ -32,13 +32,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const checkAuthStatus = async () => {
     try {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1'}/auth/me`,
+        `${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api'}/auth/me`,
         { credentials: 'include' }
       );
 
       if (response.ok) {
         const userData = await response.json();
-        setUser(userData);
+        // Map user_id to id for consistency
+        setUser({ ...userData, id: userData.user_id });
       } else {
         setUser(null);
       }
@@ -57,7 +58,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = async () => {
     try {
       await fetch(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api/v1'}/auth/logout`,
+        `${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api'}/auth/logout`,
         {
           method: 'POST',
           credentials: 'include',

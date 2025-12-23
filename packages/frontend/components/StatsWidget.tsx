@@ -27,10 +27,9 @@ export function StatsWidget() {
   const fetchStats = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/v1/sessions/stats', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        },
+      const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000/api';
+      const response = await fetch(`${API_BASE_URL}/v1/sessions/stats`, {
+        credentials: 'include',
       });
 
       if (!response.ok) {
@@ -78,20 +77,26 @@ export function StatsWidget() {
     );
   }
 
-  if (error) {
+  if (error || !stats) {
+    // Don't show error for new users with no sessions
     return (
       <Card className="w-full">
         <CardHeader>
           <CardTitle>Your Session Summary</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-destructive">Error loading stats: {error}</p>
+          <p className="text-sm text-muted-foreground mb-4">
+            You haven&apos;t started any sessions yet. Connect with a counselor to begin your journey.
+          </p>
+          <Button variant="outline" disabled>
+            View All Sessions
+          </Button>
         </CardContent>
       </Card>
     );
   }
 
-  if (!stats || stats.total_sessions === 0) {
+  if (stats.total_sessions === 0) {
     return (
       <Card className="w-full">
         <CardHeader>

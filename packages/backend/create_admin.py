@@ -1,8 +1,13 @@
 import asyncio
+import sys
 import bcrypt
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models.admin import Admin, AdminRole
+
+# Fix Windows event loop issue
+if sys.platform == 'win32':
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 async def create_admin():
     async for db in get_db():

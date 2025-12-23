@@ -59,7 +59,7 @@ export const loginUser = async (credentials: LoginFormData) => {
 
 export async function getCategories(): Promise<CounselorCategory[]> {
   const response = await apiRequest<CounselorCategoriesResponse>(
-    '/counselors/categories'
+    '/v1/counselors/categories'
   );
   return response.categories;
 }
@@ -79,7 +79,7 @@ export interface CreateVoiceRoomResponse {
 export async function createVoiceRoom(
   categoryId: string
 ): Promise<CreateVoiceRoomResponse> {
-  return apiRequest<CreateVoiceRoomResponse>('/voice/create-room', {
+  return apiRequest<CreateVoiceRoomResponse>('/v1/voice/create-room', {
     method: 'POST',
     body: JSON.stringify({
       counselor_category: categoryId
@@ -102,7 +102,7 @@ export interface CreateVideoRoomResponse {
 export async function createVideoRoom(
   categoryId: string
 ): Promise<CreateVideoRoomResponse> {
-  return apiRequest<CreateVideoRoomResponse>('/video/create-room', {
+  return apiRequest<CreateVideoRoomResponse>('/v1/video/create-room', {
     method: 'POST',
     body: JSON.stringify({
       counselor_category: categoryId

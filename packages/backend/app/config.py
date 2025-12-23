@@ -24,16 +24,20 @@ class Settings(BaseSettings):
 
     # External Services (placeholders)
     daily_api_key: str = ''
+    daily_room_url: str = ''  # Daily.co room URL
     livekit_url: str = ''
     livekit_api_key: str = ''
     livekit_api_secret: str = ''
     bey_avatar_id: str = ''
     bey_avatar_api_key: str = ''  # Beyond Presence API key
+    beyond_presence_api_key: str = ''  # Alternative field name
     deepgram_api_key: str = ''
     cartesia_api_key: str = ''
     google_api_key: str = ''
     google_tts_api_key: str = ''  # For Text-to-Speech
     openai_api_key: str = ''
+    openai_model_name: str = 'gpt-4o-mini'  # OpenAI model name
+    openai_base_url: str = ''  # Optional OpenAI base URL (for custom endpoints)
     sentry_dsn: str = ''
     
     # LLM Provider Configuration

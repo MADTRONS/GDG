@@ -32,8 +32,14 @@ export function LoginForm() {
     setError(null);
 
     try {
-      const userData = await loginUser(data);
-      login(userData);
+      const response = await loginUser(data);
+      // Map user response - ensure id field is set from user object
+      const user = {
+        id: response.user.id,
+        username: response.user.username,
+        is_blocked: response.user.is_blocked
+      };
+      login(user);
       router.push('/dashboard');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Login failed';

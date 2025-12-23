@@ -14,6 +14,7 @@ from app.routers import counselors
 from app.routers import voice
 from app.routers import sessions
 from app.routers import video
+from app.routers import llm_test
 
 settings = get_settings()
 
@@ -47,6 +48,7 @@ app.include_router(counselors.router, prefix='/api/v1')
 app.include_router(voice.router, prefix='/api/v1')
 app.include_router(sessions.router, prefix='/api/v1')
 app.include_router(video.router, prefix='/api/v1')
+app.include_router(llm_test.router, prefix='/api/v1')
 
 @app.get('/')
 async def root() -> dict[str, str]:

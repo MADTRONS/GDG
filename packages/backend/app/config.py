@@ -35,6 +35,11 @@ class Settings(BaseSettings):
     google_tts_api_key: str = ''  # For Text-to-Speech
     openai_api_key: str = ''
     sentry_dsn: str = ''
+    
+    # LLM Provider Configuration
+    llm_provider: str = 'gemini'  # 'groq' or 'gemini'
+    groq_api_key: str = ''
+    gemini_api_key: str = ''
 
 @lru_cache
 def get_settings() -> Settings:
